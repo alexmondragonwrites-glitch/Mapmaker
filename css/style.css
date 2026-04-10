@@ -1,0 +1,493 @@
+/**
+ * Calyndra Mapmaker - Fantasy-Themed UI
+ */
+
+/* ── Reset & Base ──────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+@font-face {
+    font-family: 'Fantasy';
+    src: local('Palatino Linotype'), local('Book Antiqua'), local('Palatino'), local('Georgia');
+}
+
+:root {
+    --bg-dark: #1a1412;
+    --bg-panel: #2a2218;
+    --bg-input: #3a3228;
+    --border: #5a4a3a;
+    --border-light: #7a6a5a;
+    --text: #e8d8c8;
+    --text-muted: #9a8a7a;
+    --accent: #c4873a;
+    --accent-hover: #d4974a;
+    --accent-glow: rgba(196, 135, 58, 0.3);
+    --danger: #a03030;
+    --success: #3a8a3a;
+    --sidebar-width: 320px;
+}
+
+body {
+    font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────── */
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    background: var(--bg-panel);
+    border-right: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 20% 80%, rgba(42, 34, 24, 0.8), transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(42, 34, 24, 0.6), transparent 50%),
+        var(--bg-dark);
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+
+.app-header {
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--border);
+    background: linear-gradient(180deg, rgba(42, 34, 24, 0.9), var(--bg-panel));
+}
+
+.app-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-shadow: 0 0 20px var(--accent-glow);
+}
+
+.app-subtitle {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────── */
+
+.tab-bar {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    background: var(--bg-panel);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+    background: rgba(196, 135, 58, 0.1);
+}
+
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(196, 135, 58, 0.05);
+}
+
+.tab-icon {
+    font-size: 1.1em;
+}
+
+/* ── Controls Sidebar ──────────────────────────────────────────────── */
+
+.controls-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: bold;
+    color: var(--accent);
+    font-size: 0.9em;
+    letter-spacing: 1px;
+}
+
+.controls-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg-panel);
+}
+
+.controls-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.controls-scroll::-webkit-scrollbar-track {
+    background: var(--bg-panel);
+}
+
+.controls-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.control-group {
+    margin-bottom: 12px;
+}
+
+.control-group label {
+    display: block;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.control-group input[type="number"],
+.control-group select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9em;
+    transition: border-color 0.2s;
+}
+
+.control-group input[type="number"]:focus,
+.control-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.control-group input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 8px;
+}
+
+.control-group:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.control-group:has(input[type="checkbox"]) label {
+    margin-bottom: 0;
+}
+
+/* ── Range Slider ──────────────────────────────────────────────────── */
+
+.range-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-wrap input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: var(--bg-input);
+    border-radius: 3px;
+    outline: none;
+}
+
+.range-wrap input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 4px var(--accent-glow);
+}
+
+.range-wrap input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.range-value {
+    min-width: 40px;
+    text-align: right;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Action Buttons ────────────────────────────────────────────────── */
+
+.action-bar {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn:hover {
+    border-color: var(--accent);
+    background: rgba(196, 135, 58, 0.15);
+}
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-dark);
+    font-weight: bold;
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+}
+
+.btn-danger {
+    border-color: var(--danger);
+    color: #e08080;
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+.btn-danger:hover {
+    background: rgba(160, 48, 48, 0.2);
+}
+
+/* ── Canvas Area ───────────────────────────────────────────────────── */
+
+.canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: auto;
+}
+
+#map-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    border: 2px solid var(--border);
+    box-shadow:
+        0 0 20px rgba(0, 0, 0, 0.5),
+        0 0 60px rgba(0, 0, 0, 0.2);
+    image-rendering: auto;
+}
+
+/* ── Status Bar ────────────────────────────────────────────────────── */
+
+.status-bar {
+    padding: 6px 16px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    font-size: 0.75em;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-bar .status-text.active {
+    color: var(--accent);
+}
+
+.status-bar .shortcuts {
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+.shortcuts kbd {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+/* ── Token Palette ─────────────────────────────────────────────────── */
+
+.token-palette {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.token-palette h3 {
+    font-size: 0.85em;
+    color: var(--accent);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.token-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.token-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.token-btn:hover {
+    border-color: var(--accent);
+    background: rgba(196, 135, 58, 0.1);
+}
+
+.token-btn.selected {
+    border-color: var(--accent);
+    background: rgba(196, 135, 58, 0.25);
+    box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.token-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    font-size: 0.75em;
+    flex-shrink: 0;
+}
+
+.token-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.token-list {
+    margin-top: 8px;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .app-layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        min-width: 100%;
+        max-height: 40vh;
+        border-right: none;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .canvas-container {
+        min-height: 60vh;
+    }
+}
+
+/* ── Animations ────────────────────────────────────────────────────── */
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text.active {
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* ── Print/Export Optimization ──────────────────────────────────────── */
+
+@media print {
+    .sidebar,
+    .status-bar,
+    .tab-bar {
+        display: none !important;
+    }
+
+    .canvas-container {
+        padding: 0;
+    }
+
+    #map-canvas {
+        max-width: 100%;
+        border: none;
+        box-shadow: none;
+    }
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calyndra Mapmaker - Fantasy-Kartengenerator</title>
+    <meta name="description" content="Prozeduraler Fantasy-Kartengenerator für Weltkarten, Stadtkarten und Kampfkarten">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🗺️</text></svg>">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="app-header">
+                <div class="app-title">Calyndra Mapmaker</div>
+                <div class="app-subtitle">Fantasy-Kartengenerator</div>
+            </div>
+
+            <!-- Generator Tabs -->
+            <nav class="tab-bar" id="tab-bar">
+                <!-- Tabs are generated dynamically -->
+            </nav>
+
+            <!-- Controls -->
+            <div class="controls-header">Einstellungen</div>
+            <div class="controls-scroll" id="controls-content">
+                <!-- Controls are generated dynamically based on active generator -->
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-bar">
+                <button class="btn btn-primary" id="btn-generate" title="Karte generieren (G)">
+                    Generieren
+                </button>
+                <button class="btn" id="btn-random" title="Zufälliger Seed (R)">
+                    Zufall
+                </button>
+                <button class="btn" id="btn-export" title="Als PNG exportieren (Ctrl+E)">
+                    Export PNG
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="canvas-container">
+                <canvas id="map-canvas" width="1200" height="800"></canvas>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <span class="status-text" id="status">Bereit</span>
+                <span class="shortcuts">
+                    <kbd>R</kbd> Zufall &middot;
+                    <kbd>G</kbd> Generieren &middot;
+                    <kbd>Ctrl+E</kbd> Export
+                </span>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
