@@ -12,6 +12,11 @@ import {
     drawBookMountain, drawBookTree, drawBookCity,
     drawBookBorder, drawBookCompass, drawTitleCartouche,
 } from './bookstyle.js';
+import {
+    generateAdvancedHeightMap, generateTemperatureMap, generateAdvancedMoistureMap,
+    generateRiverSystems, classifyBiome, getBiomeColor, BIOME_COLORS,
+    poissonDiskSample, findMountainRidges,
+} from './terrain.js';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -97,11 +102,24 @@ export class WorldMapGenerator {
         // Get lore data if available
         const loreHints = _loreManager?.hasLore() ? _loreManager.getWorldMapHints() : null;
 
-        // Generate height map
-        const heightMap = this._generateHeightMap(cfg, noise, noise2);
+        // ── Advanced Terrain Generation ──
+        const heightMap = generateAdvancedHeightMap(cfg.width, cfg.height, {
+            seed: cfg.seed,
+            scale: cfg.scale,
+            continentShape: cfg.continentShape,
+            seaLevel: cfg.seaLevel,
+        });
 
-        // Generate moisture map
-        const moistureMap = this._generateMoistureMap(cfg, noise2);
+        // Temperature-based climate zones (latitude + altitude)
+        const temperatureMap = generateTemperatureMap(
+            cfg.width, cfg.height, heightMap, cfg.seaLevel, cfg.seed
+        );
+        this._lastTempMap = temperatureMap;
+
+        // Moisture from coastal proximity + noise + rain shadow
+        const moistureMap = generateAdvancedMoistureMap(
+            cfg.width, cfg.height, heightMap, cfg.seaLevel, cfg.seed
+        );
 
         // Is this the book-quality style?
         const isBook = cfg.mapStyle === 'book';
@@ -147,9 +165,12 @@ export class WorldMapGenerator {
             this._renderLoreRegions(ctx, cfg, loreHints.regions);
         }
 
-        // Generate and render rivers
-        const rivers = this._generateRivers(cfg, heightMap, rng);
-        this._renderRivers(ctx, cfg, rivers, cfg.mapStyle);
+        // Generate river systems with tributary merging
+        const riverSystems = generateRiverSystems(
+            cfg.width, cfg.height, heightMap, cfg.seaLevel, cfg.mountainLevel, rng, cfg.riverCount
+        );
+        const rivers = riverSystems.map(rs => rs.points);
+        this._renderRiverSystems(ctx, cfg, riverSystems);
 
         // Render lore rivers (named)
         if (loreHints && loreHints.rivers.length > 0) {
@@ -165,18 +186,19 @@ export class WorldMapGenerator {
             });
         }
 
-        // Generate and render forests (use book style if enabled)
+        // Generate and render forests using Poisson disk for natural spacing
         if (isBook) {
-            this._renderBookForests(ctx, cfg, heightMap, moistureMap, noise, rng);
+            this._renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         } else {
-            this._renderForests(ctx, cfg, heightMap, moistureMap, noise, rng);
+            this._renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         }
 
-        // Generate and render mountains (use book style if enabled)
+        // Generate and render mountains along ridges (not random grid)
+        const ridgePoints = findMountainRidges(cfg.width, cfg.height, heightMap, cfg.mountainLevel, rng);
         if (isBook) {
-            this._renderBookMountains(ctx, cfg, heightMap, rng);
+            this._renderBookMountainRidges(ctx, cfg, ridgePoints, rng);
         } else {
-            this._renderMountainIcons(ctx, cfg, heightMap, rng);
+            this._renderMountainRidges(ctx, cfg, ridgePoints, rng);
         }
 
         // Render lore landmarks (named mountains, forests, etc.)
@@ -352,88 +374,38 @@ export class WorldMapGenerator {
     }
 
     _renderColoredStyle(ctx, cfg, heightMap, moistureMap) {
-        const { width, height, seaLevel, mountainLevel, snowLevel } = cfg;
+        const { width, height, seaLevel, mountainLevel } = cfg;
         const imageData = ctx.createImageData(width, height);
         const data = imageData.data;
-        const pal = PALETTES.terrain;
+
+        // Use temperature map for biome classification
+        const tempMap = this._lastTempMap || generateTemperatureMap(width, height, heightMap, seaLevel, cfg.seed);
+        this._lastTempMap = tempMap;
+
+        // Micro-variation noise for natural look
+        const microNoise = new SimplexNoise(cfg.seed + 9999);
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const idx = y * width + x;
                 const h = heightMap[idx];
                 const m = moistureMap[idx];
+                const t = tempMap[idx];
                 const pi = idx * 4;
 
-                let r, g, b;
+                // Classify biome using temperature + moisture
+                const biome = classifyBiome(h, m, t, seaLevel, mountainLevel);
 
-                if (h < seaLevel * 0.6) {
-                    // Deep water
-                    const c = this._hexToRgbFast(pal.deepWater);
-                    r = c[0]; g = c[1]; b = c[2];
-                } else if (h < seaLevel * 0.85) {
-                    // Water
-                    const t = (h - seaLevel * 0.6) / (seaLevel * 0.25);
-                    const c1 = this._hexToRgbFast(pal.deepWater);
-                    const c2 = this._hexToRgbFast(pal.water);
-                    r = c1[0] + (c2[0] - c1[0]) * t;
-                    g = c1[1] + (c2[1] - c1[1]) * t;
-                    b = c1[2] + (c2[2] - c1[2]) * t;
-                } else if (h < seaLevel) {
-                    // Shallow water
-                    const t = (h - seaLevel * 0.85) / (seaLevel * 0.15);
-                    const c1 = this._hexToRgbFast(pal.water);
-                    const c2 = this._hexToRgbFast(pal.shallowWater);
-                    r = c1[0] + (c2[0] - c1[0]) * t;
-                    g = c1[1] + (c2[1] - c1[1]) * t;
-                    b = c1[2] + (c2[2] - c1[2]) * t;
-                } else if (h < seaLevel + 0.03) {
-                    // Beach/sand
-                    const c = this._hexToRgbFast(pal.sand);
-                    r = c[0]; g = c[1]; b = c[2];
-                } else if (h < mountainLevel) {
-                    // Land - varies by moisture
-                    const landT = (h - seaLevel) / (mountainLevel - seaLevel);
-                    if (m > 0.65) {
-                        const c = this._hexToRgbFast(landT > 0.5 ? pal.denseForest : pal.forest);
-                        r = c[0]; g = c[1]; b = c[2];
-                    } else if (m > 0.35) {
-                        const c1 = this._hexToRgbFast(pal.grass);
-                        const c2 = this._hexToRgbFast(pal.darkGrass);
-                        const t = landT;
-                        r = c1[0] + (c2[0] - c1[0]) * t;
-                        g = c1[1] + (c2[1] - c1[1]) * t;
-                        b = c1[2] + (c2[2] - c1[2]) * t;
-                    } else if (m > 0.2) {
-                        const c1 = this._hexToRgbFast(pal.grass);
-                        const c2 = this._hexToRgbFast(pal.sand);
-                        r = c1[0] * 0.7 + c2[0] * 0.3;
-                        g = c1[1] * 0.7 + c2[1] * 0.3;
-                        b = c1[2] * 0.7 + c2[2] * 0.3;
-                    } else {
-                        const c = this._hexToRgbFast(pal.desert);
-                        r = c[0]; g = c[1]; b = c[2];
-                    }
+                // Per-pixel micro-variation (prevents flat color blocks)
+                const microVal = microNoise.noise2D(x / 8, y / 8) * 0.5
+                    + microNoise.noise2D(x / 30, y / 30) * 0.3
+                    + microNoise.noise2D(x / 80, y / 80) * 0.2;
 
-                    // Altitude shading
-                    const shade = 1 - landT * 0.2;
-                    r *= shade; g *= shade; b *= shade;
-                } else if (h < snowLevel) {
-                    // Mountains
-                    const t = (h - mountainLevel) / (snowLevel - mountainLevel);
-                    const c1 = this._hexToRgbFast(pal.mountain);
-                    const c2 = this._hexToRgbFast(pal.highMountain);
-                    r = c1[0] + (c2[0] - c1[0]) * t;
-                    g = c1[1] + (c2[1] - c1[1]) * t;
-                    b = c1[2] + (c2[2] - c1[2]) * t;
-                } else {
-                    // Snow
-                    const c = this._hexToRgbFast(pal.snow);
-                    r = c[0]; g = c[1]; b = c[2];
-                }
+                const color = getBiomeColor(biome.biome, microVal);
 
-                data[pi] = clamp(r, 0, 255);
-                data[pi + 1] = clamp(g, 0, 255);
-                data[pi + 2] = clamp(b, 0, 255);
+                data[pi] = color.r;
+                data[pi + 1] = color.g;
+                data[pi + 2] = color.b;
                 data[pi + 3] = 255;
             }
         }
@@ -1080,6 +1052,34 @@ export class WorldMapGenerator {
         ctx.putImageData(imageData, 0, 0);
     }
 
+    _renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng) {
+        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
+
+        // Poisson disk for natural spacing (book style = slightly denser)
+        const minDist = Math.max(7, 14 - forestDensity * 7);
+        const treePoints = poissonDiskSample(width, height, minDist, rng);
+
+        for (const pt of treePoints) {
+            const ix = clamp(Math.floor(pt.x), 0, width - 1);
+            const iy = clamp(Math.floor(pt.y), 0, height - 1);
+            const idx = iy * width + ix;
+
+            const h = heightMap[idx];
+            const m = moistureMap[idx];
+            const t = temperatureMap[idx];
+
+            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
+            if (m < 0.35) continue;
+            const forestChance = (m - 0.35) * 2.5 * forestDensity;
+            if (rng.next() > forestChance) continue;
+
+            const type = t < 0.25 ? 'pine' : (rng.next() > 0.35 ? 'deciduous' : 'pine');
+            const size = rng.nextFloat(4, 7);
+            drawBookTree(ctx, pt.x, pt.y, size, { type });
+        }
+    }
+
+    // Legacy method kept for compatibility
     _renderBookForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
         const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
         const treeSpacing = 10;
@@ -1132,6 +1132,118 @@ export class WorldMapGenerator {
             drawBookCity(ctx, city.x, city.y, size, {
                 isCapital: city.isCapital || city.size === 'large',
             });
+        }
+    }
+
+    // ── Natural Rendering Methods (New Terrain Engine) ──────────────
+
+    /**
+     * Render rivers as a connected system with varying widths
+     * Rivers that merge show as thicker downstream
+     */
+    _renderRiverSystems(ctx, cfg, riverSystems) {
+        const isBook = cfg.mapStyle === 'book';
+        const isParchment = cfg.mapStyle === 'parchment';
+        const color = isBook ? 'rgba(40, 65, 105, 0.7)' :
+                      isParchment ? PALETTES.parchment.water : '#4a90c4';
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (const river of riverSystems) {
+            const pts = river.points;
+            if (pts.length < 3) continue;
+
+            // Draw river with varying width
+            for (let i = 0; i < pts.length - 1; i++) {
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                ctx.strokeStyle = color;
+                ctx.lineWidth = p1.width || 1;
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+
+                // Smooth curve
+                if (i < pts.length - 2) {
+                    const p3 = pts[i + 2];
+                    const cpx = (p2.x + p3.x) / 2;
+                    const cpy = (p2.y + p3.y) / 2;
+                    ctx.quadraticCurveTo(p2.x, p2.y, cpx, cpy);
+                } else {
+                    ctx.lineTo(p2.x, p2.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+    }
+
+    /**
+     * Render forests using Poisson disk sampling for natural spacing
+     * Trees cluster in moist areas and thin out in dry areas
+     */
+    _renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng) {
+        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
+
+        // Poisson disk for natural spacing
+        const minDist = Math.max(8, 16 - forestDensity * 8);
+        const treePoints = poissonDiskSample(width, height, minDist, rng);
+
+        for (const pt of treePoints) {
+            const ix = clamp(Math.floor(pt.x), 0, width - 1);
+            const iy = clamp(Math.floor(pt.y), 0, height - 1);
+            const idx = iy * width + ix;
+
+            const h = heightMap[idx];
+            const m = moistureMap[idx];
+            const t = temperatureMap[idx];
+
+            // Only draw on land, not mountains
+            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
+
+            // Moisture threshold with smooth falloff
+            if (m < 0.35) continue;
+            const forestChance = (m - 0.35) * 2.5 * forestDensity;
+            if (rng.next() > forestChance) continue;
+
+            // Tree type based on temperature
+            let type;
+            if (t < 0.25) {
+                type = 'pine'; // Cold = conifers
+            } else if (t > 0.7) {
+                type = 'deciduous'; // Tropical = broad leaves
+                if (rng.next() > 0.5) continue; // Sparser in savanna
+            } else {
+                type = rng.next() > 0.35 ? 'deciduous' : 'pine'; // Mixed
+            }
+
+            const size = rng.nextFloat(5, 9);
+            drawTree(ctx, pt.x, pt.y, size, { type });
+        }
+    }
+
+    /**
+     * Render mountains along detected ridges (connected ranges)
+     */
+    _renderMountainRidges(ctx, cfg, ridgePoints, rng) {
+        for (const pt of ridgePoints) {
+            // Small chance of volcano on highest peaks
+            if (pt.isPeak && pt.height > cfg.mountainLevel + 0.18 && rng.next() > 0.9) {
+                drawVolcano(ctx, pt.x, pt.y, pt.size * 1.2);
+            } else {
+                drawMountain(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 });
+            }
+        }
+    }
+
+    /**
+     * Render book-style mountains along ridges
+     */
+    _renderBookMountainRidges(ctx, cfg, ridgePoints, rng) {
+        for (const pt of ridgePoints) {
+            drawBookMountain(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 });
         }
     }
 
