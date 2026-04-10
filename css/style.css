@@ -441,6 +441,304 @@ body {
     color: var(--text-muted);
 }
 
+/* ── Lore Panel ───────────────────────────────────────────────────── */
+
+.lore-section {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.lore-section:last-child {
+    border-bottom: none;
+}
+
+.lore-section-title {
+    font-size: 0.85em;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.lore-input,
+.lore-textarea {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85em;
+    transition: border-color 0.2s;
+    margin-bottom: 4px;
+}
+
+.lore-input:focus,
+.lore-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.lore-textarea {
+    resize: vertical;
+    min-height: 50px;
+}
+
+/* Upload Area */
+.lore-upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 10px;
+    position: relative;
+}
+
+.lore-upload-area:hover,
+.lore-upload-area.dragover {
+    border-color: var(--accent);
+    background: rgba(196, 135, 58, 0.08);
+}
+
+.upload-icon {
+    font-size: 2em;
+    margin-bottom: 4px;
+}
+
+.upload-text {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.upload-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Lore Button Row */
+.lore-btn-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.lore-btn-row .btn {
+    flex: 1;
+    justify-content: center;
+    font-size: 0.8em;
+    padding: 6px 10px;
+}
+
+.btn-danger-small {
+    border-color: var(--danger) !important;
+    color: #e08080 !important;
+    font-size: 0.8em;
+}
+
+.btn-danger-small:hover {
+    background: rgba(160, 48, 48, 0.2) !important;
+}
+
+/* Lore Status */
+.lore-status {
+    font-size: 0.8em;
+    padding: 6px 10px;
+    border-radius: 4px;
+    min-height: 0;
+    transition: all 0.3s;
+}
+
+.lore-status:empty {
+    padding: 0;
+}
+
+.lore-status.success {
+    background: rgba(58, 138, 58, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(58, 138, 58, 0.3);
+}
+
+.lore-status.error {
+    background: rgba(160, 48, 48, 0.15);
+    color: #e08080;
+    border: 1px solid rgba(160, 48, 48, 0.3);
+}
+
+/* Lore Stats */
+.lore-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.lore-stats .stat {
+    text-align: center;
+    padding: 6px 4px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.stat-num {
+    display: block;
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--accent);
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.65em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Lore Cards */
+.lore-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.lore-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+
+.lore-card:hover {
+    border-color: var(--border-light);
+}
+
+.lore-card.expanded {
+    border-color: var(--accent);
+}
+
+.lore-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.lore-card-header:hover {
+    background: rgba(196, 135, 58, 0.08);
+}
+
+.lore-card-name {
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--text);
+}
+
+.lore-card-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    border-radius: 2px;
+    transition: all 0.2s;
+}
+
+.lore-card-delete:hover {
+    color: #e08080;
+    background: rgba(160, 48, 48, 0.2);
+}
+
+.lore-card-details {
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.lore-field {
+    margin-bottom: 6px;
+}
+
+.lore-field label {
+    display: block;
+    font-size: 0.7em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.lore-field .lore-input,
+.lore-field textarea,
+.lore-field select,
+.lore-field input[type="number"] {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85em;
+}
+
+.lore-field input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+
+.lore-add-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.8em;
+    padding: 6px;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.lore-add-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ── Zoom UI ──────────────────────────────────────────────────────── */
+
+.zoom-hint {
+    background: rgba(196, 135, 58, 0.1);
+    border: 1px solid rgba(196, 135, 58, 0.3);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 0.8em;
+    color: var(--text);
+    line-height: 1.4;
+}
+
+.zoom-back-btn {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 12px;
+    background: rgba(196, 135, 58, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.zoom-back-btn:hover {
+    background: rgba(196, 135, 58, 0.25);
+}
+
 /* ── Responsive ────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {

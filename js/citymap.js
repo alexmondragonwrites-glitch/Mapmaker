@@ -7,6 +7,10 @@ import { SimplexNoise } from './noise.js';
 import { NameGenerator, PALETTES, SeededRandom, clamp, distance } from './utils.js';
 import { drawHumanHouse, drawElvenHouse, drawDwarvenHouse, drawTower, drawTemple, drawTavern, drawCastle, drawTree, drawMapBorder } from './assets.js';
 
+// Lore integration - set externally
+let _loreManager = null;
+export function setCityMapLore(lore) { _loreManager = lore; }
+
 export class CityMapGenerator {
     static id = 'citymap';
     static label = 'Stadtkarte';
@@ -64,6 +68,23 @@ export class CityMapGenerator {
 
     generate(canvas, config = {}) {
         const cfg = { ...this.defaultConfig, ...config };
+
+        // Apply lore hints if a lore city ID is set
+        if (cfg.loreCityId && _loreManager) {
+            const hints = _loreManager.getCityMapHints(cfg.loreCityId);
+            if (hints) {
+                cfg.citySize = hints.size || cfg.citySize;
+                cfg.style = hints.style || cfg.style;
+                cfg.hasWalls = hints.hasWalls ?? cfg.hasWalls;
+                cfg.hasRiver = hints.hasRiver ?? cfg.hasRiver;
+                cfg.hasCastle = hints.hasCastle ?? cfg.hasCastle;
+                cfg._loreName = hints.name;
+                cfg._loreDistricts = hints.districts;
+                cfg._loreNPCs = hints.npcs;
+                cfg._loreFaction = hints.faction;
+            }
+        }
+
         canvas.width = cfg.width;
         canvas.height = cfg.height;
         const ctx = canvas.getContext('2d');
@@ -72,7 +93,7 @@ export class CityMapGenerator {
         const rng = new SeededRandom(cfg.seed);
         const names = new NameGenerator(cfg.seed);
 
-        const cityName = names.generate('city');
+        const cityName = cfg._loreName || names.generate('city');
         const cityRadius = this._getCityRadius(cfg);
         const centerX = cfg.width / 2;
         const centerY = cfg.height / 2;
@@ -505,6 +526,13 @@ export class CityMapGenerator {
         ctx.fillStyle = '#2a1a0a';
         ctx.fillText(cityName, centerX, 20);
 
+        // Faction subtitle (from lore)
+        if (cfg._loreFaction) {
+            ctx.font = 'italic 12px "Palatino Linotype", serif';
+            ctx.fillStyle = '#5a4a3a';
+            ctx.fillText(`${cfg._loreFaction.name}`, centerX, 46);
+        }
+
         // District labels
         ctx.font = 'italic 10px "Palatino Linotype", serif';
         for (const district of districts) {
@@ -513,6 +541,37 @@ export class CityMapGenerator {
             ctx.strokeText(district.name, district.x, district.y + district.radius * 0.5);
             ctx.fillStyle = '#3a2a1a';
             ctx.fillText(district.name, district.x, district.y + district.radius * 0.5);
+        }
+
+        // NPC markers (from lore)
+        if (cfg._loreNPCs && cfg._loreNPCs.length > 0) {
+            const rng = new SeededRandom(cfg.seed + 999);
+            ctx.save();
+            for (const npc of cfg._loreNPCs) {
+                // Place NPCs in random district areas
+                const d = districts[rng.nextInt(0, districts.length - 1)];
+                const nx = d.x + rng.nextFloat(-d.radius * 0.4, d.radius * 0.4);
+                const ny = d.y + rng.nextFloat(-d.radius * 0.4, d.radius * 0.4);
+
+                // NPC marker
+                ctx.fillStyle = '#aa8a2a';
+                ctx.beginPath();
+                ctx.arc(nx, ny, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#2a1a0a';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // NPC name
+                ctx.font = 'bold 8px "Palatino Linotype", serif';
+                ctx.textAlign = 'center';
+                ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                ctx.lineWidth = 2;
+                ctx.strokeText(npc.name, nx, ny - 8);
+                ctx.fillStyle = '#4a2a0a';
+                ctx.fillText(npc.name, nx, ny - 8);
+            }
+            ctx.restore();
         }
     }
 }

@@ -7,6 +7,13 @@ import { SimplexNoise } from './noise.js';
 import { NameGenerator, PALETTES, SeededRandom, clamp, smoothstep, distance, lerpColor } from './utils.js';
 import { drawMountain, drawVolcano, drawTree, drawRiver, drawCastle, drawCompassRose, drawMapBorder, drawScaleBar } from './assets.js';
 
+// Lore and Zoom are optional - loaded dynamically when available
+let _loreManager = null;
+let _zoomController = null;
+
+export function setWorldMapLore(lore) { _loreManager = lore; }
+export function setWorldMapZoom(zoom) { _zoomController = zoom; }
+
 export class WorldMapGenerator {
     static id = 'worldmap';
     static label = 'Weltkarte';
@@ -80,6 +87,9 @@ export class WorldMapGenerator {
         const rng = new SeededRandom(cfg.seed);
         const names = new NameGenerator(cfg.seed);
 
+        // Get lore data if available
+        const loreHints = _loreManager?.hasLore() ? _loreManager.getWorldMapHints() : null;
+
         // Generate height map
         const heightMap = this._generateHeightMap(cfg, noise, noise2);
 
@@ -93,9 +103,19 @@ export class WorldMapGenerator {
             this._renderColoredStyle(ctx, cfg, heightMap, moistureMap);
         }
 
+        // Render lore region overlays (subtle borders/labels)
+        if (loreHints && loreHints.regions.length > 0) {
+            this._renderLoreRegions(ctx, cfg, loreHints.regions);
+        }
+
         // Generate and render rivers
         const rivers = this._generateRivers(cfg, heightMap, rng);
         this._renderRivers(ctx, cfg, rivers, cfg.mapStyle);
+
+        // Render lore rivers (named)
+        if (loreHints && loreHints.rivers.length > 0) {
+            this._renderLoreRiverLabels(ctx, cfg, rivers, loreHints.rivers);
+        }
 
         // Generate and render forests
         this._renderForests(ctx, cfg, heightMap, moistureMap, noise, rng);
@@ -103,12 +123,17 @@ export class WorldMapGenerator {
         // Generate and render mountains
         this._renderMountainIcons(ctx, cfg, heightMap, rng);
 
-        // Generate cities
-        const cities = this._generateCities(cfg, heightMap, rivers, rng, names);
+        // Render lore landmarks (named mountains, forests, etc.)
+        if (loreHints && loreHints.landmarks.length > 0) {
+            this._renderLoreLandmarks(ctx, cfg, loreHints.landmarks, heightMap);
+        }
+
+        // Generate cities - use lore cities if available
+        const cities = this._generateCities(cfg, heightMap, rivers, rng, names, loreHints);
         this._renderCities(ctx, cfg, cities);
 
-        // Render roads between cities
-        this._renderRoads(ctx, cfg, cities, heightMap);
+        // Render roads between cities (use lore roads if available)
+        this._renderRoads(ctx, cfg, cities, heightMap, loreHints);
 
         // Labels
         if (cfg.showLabels) {
@@ -120,8 +145,67 @@ export class WorldMapGenerator {
         if (cfg.showCompass) drawCompassRose(ctx, cfg.width - 80, cfg.height - 80, 60);
         if (cfg.showScaleBar) drawScaleBar(ctx, cfg.width * 0.05, cfg.height - 40, cfg.width);
 
-        // Title
-        this._renderTitle(ctx, cfg, names);
+        // Title - use world name from lore if available
+        this._renderTitle(ctx, cfg, names, loreHints);
+
+        // Register clickable areas for zoom if zoom controller exists
+        if (_zoomController) {
+            _zoomController.clearClickableAreas();
+
+            // Cities are clickable → zoom to city map
+            for (const city of cities) {
+                const clickRadius = city.isCapital || city.size === 'large' ? 20 : 12;
+                _zoomController.registerClickableArea({
+                    shape: 'circle',
+                    x: city.x,
+                    y: city.y,
+                    radius: clickRadius,
+                    label: `${city.name} (Stadt anzeigen)`,
+                    targetLevel: 'city',
+                    targetData: {
+                        name: city.name,
+                        id: city.loreId || null,
+                        size: city.size,
+                        style: city.style || 'human',
+                        isCapital: city.isCapital,
+                        seed: cfg.seed + city.name.charCodeAt(0) * 100,
+                    },
+                });
+            }
+
+            // Lore regions are clickable → zoom to region view
+            if (loreHints) {
+                for (const region of loreHints.regions) {
+                    const rx = region.relX * cfg.width;
+                    const ry = region.relY * cfg.height;
+                    const rRadius = region.relRadius * Math.min(cfg.width, cfg.height);
+                    _zoomController.registerClickableArea({
+                        shape: 'circle',
+                        x: rx,
+                        y: ry,
+                        radius: rRadius,
+                        label: `${region.name} (Region anzeigen)`,
+                        targetLevel: 'region',
+                        targetData: {
+                            id: region.id,
+                            name: region.name,
+                            seed: cfg.seed,
+                        },
+                        showIndicator: false, // regions are subtle
+                    });
+                }
+            }
+
+            // Render breadcrumbs if zoomed
+            _zoomController.renderBreadcrumbs(ctx, cfg.width);
+        }
+
+        // Store generated data for external access
+        this._lastGeneratedData = { cities, rivers, heightMap, moistureMap, cfg };
+    }
+
+    getLastGeneratedData() {
+        return this._lastGeneratedData;
     }
 
     _generateHeightMap(cfg, noise, noise2) {
@@ -460,11 +544,81 @@ export class WorldMapGenerator {
         }
     }
 
-    _generateCities(cfg, heightMap, rivers, rng, names) {
+    _generateCities(cfg, heightMap, rivers, rng, names, loreHints) {
         const { width, height, seaLevel, mountainLevel, cityCount } = cfg;
         const cities = [];
 
-        for (let i = 0; i < cityCount; i++) {
+        // First: place lore cities at their specified positions
+        if (loreHints && loreHints.cities.length > 0) {
+            for (const loreCity of loreHints.cities) {
+                let cx, cy;
+
+                if (loreCity.relX !== null && loreCity.relY !== null) {
+                    // Use specified relative position
+                    cx = Math.floor(loreCity.relX * width);
+                    cy = Math.floor(loreCity.relY * height);
+                } else if (loreCity.regionId) {
+                    // Place near region center
+                    const region = loreHints.regions.find(r => r.id === loreCity.regionId);
+                    if (region) {
+                        cx = Math.floor(region.relX * width + rng.nextFloat(-40, 40));
+                        cy = Math.floor(region.relY * height + rng.nextFloat(-40, 40));
+                    } else {
+                        cx = rng.nextInt(width * 0.1, width * 0.9);
+                        cy = rng.nextInt(height * 0.1, height * 0.9);
+                    }
+                } else {
+                    // Find a good land position
+                    cx = rng.nextInt(width * 0.1, width * 0.9);
+                    cy = rng.nextInt(height * 0.1, height * 0.9);
+                    for (let attempt = 0; attempt < 50; attempt++) {
+                        const h = heightMap[cy * width + cx];
+                        if (h > seaLevel + 0.02 && h < mountainLevel * 0.85) break;
+                        cx = rng.nextInt(width * 0.1, width * 0.9);
+                        cy = rng.nextInt(height * 0.1, height * 0.9);
+                    }
+                }
+
+                // Clamp to canvas
+                cx = clamp(cx, 10, width - 10);
+                cy = clamp(cy, 10, height - 10);
+
+                // Snap to land if possible
+                const h = heightMap[clamp(cy, 0, height - 1) * width + clamp(cx, 0, width - 1)];
+                if (h < seaLevel) {
+                    // Search nearby for land
+                    for (let r = 5; r < 60; r += 5) {
+                        for (let a = 0; a < Math.PI * 2; a += 0.5) {
+                            const nx = clamp(Math.floor(cx + Math.cos(a) * r), 0, width - 1);
+                            const ny = clamp(Math.floor(cy + Math.sin(a) * r), 0, height - 1);
+                            if (heightMap[ny * width + nx] > seaLevel + 0.02) {
+                                cx = nx;
+                                cy = ny;
+                                r = 999; // break outer
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                const sizeMap = { village: 'small', town: 'small', city: 'medium', metropolis: 'large', capital: 'large' };
+                cities.push({
+                    x: cx,
+                    y: cy,
+                    name: loreCity.name,
+                    size: sizeMap[loreCity.size] || 'medium',
+                    style: loreCity.style || 'human',
+                    isCapital: loreCity.isCapital || false,
+                    loreId: loreCity.id,
+                    description: loreCity.description,
+                    fromLore: true,
+                });
+            }
+        }
+
+        // Then: fill remaining slots with procedural cities
+        const remainingCount = Math.max(0, cityCount - cities.length);
+        for (let i = 0; i < remainingCount; i++) {
             let bestX = 0, bestY = 0, bestScore = -Infinity;
 
             for (let attempt = 0; attempt < 100; attempt++) {
@@ -474,7 +628,6 @@ export class WorldMapGenerator {
 
                 if (h < seaLevel + 0.02 || h > mountainLevel * 0.85) continue;
 
-                // Score: prefer coastal, near rivers, away from other cities
                 let score = 0;
 
                 // Coastal bonus
@@ -494,7 +647,7 @@ export class WorldMapGenerator {
                     }
                 }
 
-                // Distance from other cities
+                // Distance from ALL cities (including lore cities)
                 let minCityDist = Infinity;
                 for (const city of cities) {
                     const d = distance(x, y, city.x, city.y);
@@ -511,13 +664,14 @@ export class WorldMapGenerator {
             }
 
             if (bestScore > -50) {
-                const isCapital = i === 0;
+                const isCapital = cities.length === 0 && i === 0;
                 cities.push({
                     x: bestX,
                     y: bestY,
                     name: names.generate('city'),
                     size: isCapital ? 'large' : (rng.next() > 0.6 ? 'medium' : 'small'),
                     isCapital,
+                    fromLore: false,
                 });
             }
         }
@@ -542,12 +696,48 @@ export class WorldMapGenerator {
         }
     }
 
-    _renderRoads(ctx, cfg, cities, heightMap) {
+    _renderRoads(ctx, cfg, cities, heightMap, loreHints) {
         if (cities.length < 2) return;
 
         ctx.strokeStyle = cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
+
+        // Draw lore-defined roads first (thicker, with names)
+        if (loreHints && loreHints.roads.length > 0) {
+            ctx.save();
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeStyle = cfg.mapStyle === 'parchment' ? '#6a5a4a' : '#7a6a4a';
+
+            for (const road of loreHints.roads) {
+                const fromCity = cities.find(c => c.loreId === road.fromCityId || c.name === road.fromCityId);
+                const toCity = cities.find(c => c.loreId === road.toCityId || c.name === road.toCityId);
+                if (!fromCity || !toCity) continue;
+
+                ctx.beginPath();
+                ctx.moveTo(fromCity.x, fromCity.y);
+                const midX = (fromCity.x + toCity.x) / 2 + (Math.random() - 0.5) * 30;
+                const midY = (fromCity.y + toCity.y) / 2 + (Math.random() - 0.5) * 30;
+                ctx.quadraticCurveTo(midX, midY, toCity.x, toCity.y);
+                ctx.stroke();
+
+                // Road name label
+                if (road.name) {
+                    ctx.save();
+                    ctx.font = 'italic 8px "Palatino Linotype", serif';
+                    ctx.fillStyle = cfg.mapStyle === 'parchment' ? '#5a4a3a' : '#6a5a3a';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(road.name, midX, midY - 6);
+                    ctx.restore();
+                }
+            }
+            ctx.restore();
+
+            ctx.strokeStyle = cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+        }
 
         // Connect nearby cities
         for (let i = 0; i < cities.length; i++) {
@@ -621,8 +811,11 @@ export class WorldMapGenerator {
         }
     }
 
-    _renderTitle(ctx, cfg, names) {
-        const title = 'Calyndra';
+    _renderTitle(ctx, cfg, names, loreHints) {
+        const title = loreHints?.worldName || 'Calyndra';
+        const subtitle = loreHints?.worldDescription
+            ? `~ ${loreHints.worldDescription.slice(0, 60)}${loreHints.worldDescription.length > 60 ? '...' : ''} ~`
+            : '~ Eine Fantasywelt ~';
         const fontSize = Math.max(20, cfg.width * 0.025);
 
         ctx.font = `bold ${fontSize}px "Palatino Linotype", "Book Antiqua", Palatino, serif`;
@@ -643,7 +836,105 @@ export class WorldMapGenerator {
 
         // Subtitle
         ctx.font = `italic ${fontSize * 0.5}px "Palatino Linotype", serif`;
-        ctx.fillText('~ Eine Fantasywelt ~', x, y + fontSize + 4);
+        ctx.fillText(subtitle, x, y + fontSize + 4);
+    }
+
+    // ── Lore Rendering Methods ──────────────────────────────────────
+
+    _renderLoreRegions(ctx, cfg, regions) {
+        ctx.save();
+        for (const region of regions) {
+            const rx = region.relX * cfg.width;
+            const ry = region.relY * cfg.height;
+            const rRadius = region.relRadius * Math.min(cfg.width, cfg.height);
+
+            // Subtle region boundary
+            ctx.strokeStyle = 'rgba(42, 26, 10, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.arc(rx, ry, rRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Region name
+            ctx.setLineDash([]);
+            ctx.font = 'italic 13px "Palatino Linotype", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 3;
+            ctx.strokeText(region.name, rx, ry - rRadius + 15);
+            ctx.fillStyle = 'rgba(42, 26, 10, 0.7)';
+            ctx.fillText(region.name, rx, ry - rRadius + 15);
+        }
+        ctx.restore();
+    }
+
+    _renderLoreRiverLabels(ctx, cfg, generatedRivers, loreRivers) {
+        // Label generated rivers with lore names if available
+        const isParchment = cfg.mapStyle === 'parchment';
+        const usedRivers = new Set();
+
+        for (let i = 0; i < Math.min(generatedRivers.length, loreRivers.length); i++) {
+            const river = generatedRivers[i];
+            const loreRiver = loreRivers[i];
+            if (river.length < 10 || !loreRiver.name) continue;
+
+            const midIdx = Math.floor(river.length * 0.4);
+            const pt = river[midIdx];
+
+            ctx.save();
+            ctx.font = 'italic 10px "Palatino Linotype", serif';
+            ctx.fillStyle = isParchment ? PALETTES.parchment.water : '#2a5a8a';
+            ctx.textAlign = 'center';
+
+            const nextPt = river[Math.min(midIdx + 3, river.length - 1)];
+            const angle = Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x);
+            ctx.translate(pt.x, pt.y);
+            ctx.rotate(angle);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2;
+            ctx.strokeText(loreRiver.name, 0, -6);
+            ctx.fillText(loreRiver.name, 0, -6);
+            ctx.restore();
+
+            usedRivers.add(i);
+        }
+    }
+
+    _renderLoreLandmarks(ctx, cfg, landmarks, heightMap) {
+        ctx.save();
+        for (const lm of landmarks) {
+            if (lm.relX === null || lm.relY === null) continue;
+
+            const lx = lm.relX * cfg.width;
+            const ly = lm.relY * cfg.height;
+
+            // Render label for the landmark
+            ctx.font = 'bold 10px "Palatino Linotype", serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 3;
+
+            let label = lm.name;
+            let yOffset = 0;
+
+            // Add type-specific prefix/icon hint
+            switch (lm.type) {
+                case 'mountain': label = '⛰ ' + lm.name; yOffset = -8; break;
+                case 'volcano': label = '🌋 ' + lm.name; yOffset = -8; break;
+                case 'forest': label = '🌲 ' + lm.name; yOffset = 4; break;
+                case 'lake': label = '💧 ' + lm.name; yOffset = 4; break;
+                case 'ruins': label = '🏚 ' + lm.name; yOffset = 4; break;
+                case 'cave': label = '⬛ ' + lm.name; yOffset = 4; break;
+            }
+
+            ctx.strokeText(label, lx, ly + yOffset);
+            ctx.fillStyle = '#2a1a0a';
+            ctx.fillText(label, lx, ly + yOffset);
+        }
+        ctx.restore();
     }
 
     _hexToRgbFast(hex) {
