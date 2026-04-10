@@ -41,27 +41,29 @@ export function generateAdvancedHeightMap(width, height, config) {
             const nx = x / width * scale;
             const ny = y / height * scale;
 
-            // Deep domain warping for irregular continent shapes
-            // This creates peninsulas, bays, and interesting coastlines
+            // Domain warping for irregular continent shapes (moderate strength)
             const warp1x = noise2.fbm(nx * 0.7 + 3.1, ny * 0.7 + 7.2, 3, 2.0, 0.5);
             const warp1y = noise2.fbm(nx * 0.7 + 8.5, ny * 0.7 + 2.9, 3, 2.0, 0.5);
-            const warpedX = nx + warp1x * 0.8;
-            const warpedY = ny + warp1y * 0.8;
+            const warpedX = nx + warp1x * 0.45;
+            const warpedY = ny + warp1y * 0.45;
 
-            // Second warp pass for even more complexity
+            // Second warp for detail
             const warp2x = noise3.fbm(warpedX * 0.5 + 1.7, warpedY * 0.5 + 4.3, 2, 2.0, 0.5);
             const warp2y = noise3.fbm(warpedX * 0.5 + 6.1, warpedY * 0.5 + 9.2, 2, 2.0, 0.5);
-            const wx = warpedX + warp2x * 0.3;
-            const wy = warpedY + warp2y * 0.3;
+            const wx = warpedX + warp2x * 0.15;
+            const wy = warpedY + warp2y * 0.15;
 
-            // Base continental shelf
-            let h = noise.fbm(wx, wy, 5, 2.0, 0.5) * 0.55;
+            // Base continental shelf - positive bias for more land
+            let h = noise.fbm(wx, wy, 5, 2.0, 0.5) * 0.5;
 
-            // Add medium-scale terrain variation
-            h += noise2.fbm(nx * 1.8 + 50, ny * 1.8 + 50, 4, 2.0, 0.45) * 0.25;
+            // Medium-scale variation
+            h += noise2.fbm(nx * 1.8 + 50, ny * 1.8 + 50, 4, 2.0, 0.45) * 0.2;
 
             // Fine detail
-            h += noise4.fbm(nx * 4, ny * 4, 3, 2.5, 0.35) * 0.08;
+            h += noise4.fbm(nx * 4, ny * 4, 3, 2.5, 0.35) * 0.06;
+
+            // Land bias: shift distribution so ~55-65% is above sea level
+            h += 0.15;
 
             map[y * width + x] = (h + 1) * 0.5;
         }
@@ -73,13 +75,14 @@ export function generateAdvancedHeightMap(width, height, config) {
     // ── Pass 3: Continent shape masking ──
     _applyContinent(map, width, height, continentShape, noise3);
 
-    // ── Pass 4: Coastal erosion (create interesting coastlines) ──
+    // ── Pass 4: Coastal erosion (gentler) ──
     _erodeCoastline(map, width, height, seaLevel, seed);
 
-    // ── Pass 5: Hydraulic erosion (carve valleys, create drainage) ──
-    _simulateErosion(map, width, height, seaLevel, 3);
+    // ── Pass 5: Light hydraulic erosion ──
+    _simulateErosion(map, width, height, seaLevel, 2);
 
-    // Normalize to [0, 1]
+    // ── Normalize and ensure land/water balance ──
+    // First normalize to [0, 1]
     let min = Infinity, max = -Infinity;
     for (let i = 0; i < map.length; i++) {
         if (map[i] < min) min = map[i];
@@ -88,6 +91,26 @@ export function generateAdvancedHeightMap(width, height, config) {
     const range = max - min || 1;
     for (let i = 0; i < map.length; i++) {
         map[i] = (map[i] - min) / range;
+    }
+
+    // Then shift so that seaLevel sits at roughly the right percentile
+    // Count how much is currently below sea level
+    let belowSea = 0;
+    for (let i = 0; i < map.length; i++) {
+        if (map[i] < seaLevel) belowSea++;
+    }
+    const waterRatio = belowSea / map.length;
+
+    // Target: ~30-45% water. If too much water, raise everything.
+    const targetWaterRatio = 0.38;
+    if (waterRatio > targetWaterRatio + 0.1) {
+        // Find what value would give us the target water ratio
+        const sorted = Float32Array.from(map).sort();
+        const targetIdx = Math.floor(targetWaterRatio * map.length);
+        const shift = seaLevel - sorted[targetIdx];
+        for (let i = 0; i < map.length; i++) {
+            map[i] = clamp(map[i] + shift, 0, 1);
+        }
     }
 
     return map;
@@ -529,36 +552,42 @@ export function classifyBiome(height, moisture, temperature, seaLevel, mountainL
 
 // ── Biome Color Palette (natural, blended) ──────────────────────────
 
+// Warm, painted fantasy palette inspired by hand-drawn RPG maps
 export const BIOME_COLORS = {
-    deepWater:       { r: 22, g: 50, b: 82 },
-    water:           { r: 35, g: 82, b: 130 },
-    shallowWater:    { r: 62, g: 120, b: 170 },
-    beach:           { r: 210, g: 190, b: 140 },
-    tundra:          { r: 150, g: 165, b: 140 },
-    taiga:           { r: 50, g: 75, b: 50 },
-    dryScrub:        { r: 165, g: 150, b: 100 },
-    grassland:       { r: 95, g: 138, b: 62 },
-    savanna:         { r: 170, g: 155, b: 80 },
-    desert:          { r: 195, g: 170, b: 95 },
-    temperateForest: { r: 45, g: 100, b: 35 },
-    denseForest:     { r: 25, g: 65, b: 18 },
-    tropicalForest:  { r: 20, g: 80, b: 25 },
-    mountain:        { r: 105, g: 100, b: 90 },
-    snow:            { r: 230, g: 232, b: 228 },
+    deepWater:       { r: 68, g: 108, b: 140 },
+    water:           { r: 95, g: 140, b: 168 },
+    shallowWater:    { r: 135, g: 175, b: 195 },
+    beach:           { r: 215, g: 198, b: 155 },
+    tundra:          { r: 165, g: 175, b: 155 },
+    taiga:           { r: 60, g: 85, b: 55 },
+    dryScrub:        { r: 175, g: 165, b: 115 },
+    grassland:       { r: 125, g: 158, b: 75 },
+    savanna:         { r: 180, g: 168, b: 95 },
+    desert:          { r: 200, g: 180, b: 110 },
+    temperateForest: { r: 55, g: 105, b: 40 },
+    denseForest:     { r: 30, g: 72, b: 22 },
+    tropicalForest:  { r: 35, g: 90, b: 30 },
+    mountain:        { r: 120, g: 115, b: 100 },
+    snow:            { r: 235, g: 238, b: 232 },
+    hills:           { r: 140, g: 148, b: 85 },
 };
 
 /**
  * Get blended biome color with per-pixel micro-variation
+ * Produces the warm, painted look of hand-drawn fantasy maps
  */
-export function getBiomeColor(biome, noiseVal) {
+export function getBiomeColor(biome, noiseVal, blendT = 0) {
     const base = BIOME_COLORS[biome] || BIOME_COLORS.grassland;
 
-    // Per-pixel variation: noise shifts each channel slightly
-    const variation = noiseVal * 12;
+    // Per-pixel micro-variation for painted look
+    // Larger range for more visible texture
+    const variation = noiseVal * 16;
+    const warmShift = noiseVal * 4; // Slight warm bias
+
     return {
-        r: clamp(base.r + variation, 0, 255),
-        g: clamp(base.g + variation * 0.8, 0, 255),
-        b: clamp(base.b + variation * 0.6, 0, 255),
+        r: clamp(base.r + variation + warmShift, 0, 255),
+        g: clamp(base.g + variation * 0.7, 0, 255),
+        b: clamp(base.b + variation * 0.5 - warmShift * 0.3, 0, 255),
     };
 }
 

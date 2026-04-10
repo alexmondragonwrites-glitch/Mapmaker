@@ -727,3 +727,151 @@ export function drawCastle(ctx, x, y, size) {
 
     ctx.restore();
 }
+
+// ── City-Specific Buildings ─────────────────────────────────────────
+
+export function drawForge(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#5a5050'; ctx.fillRect(-s*0.45, -s*0.1, s*0.9, s*0.4);
+    ctx.fillStyle = '#4a3020'; ctx.beginPath();
+    ctx.moveTo(-s*0.5,-s*0.1); ctx.lineTo(0,-s*0.35); ctx.lineTo(s*0.5,-s*0.1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a3030'; ctx.fillRect(s*0.1, -s*0.6, s*0.2, s*0.35);
+    ctx.fillStyle = '#dd6600'; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(-s*0.2, s*0.1, s*0.08, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.arc(-s*0.2, s*0.1, s*0.04, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1; ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(s*0.28, s*0.12, s*0.16, s*0.04); ctx.fillRect(s*0.3, s*0.15, s*0.12, s*0.1);
+    ctx.restore();
+}
+
+export function drawChurch(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#b0a080'; ctx.fillRect(-s*0.35, -s*0.1, s*0.7, s*0.4);
+    ctx.fillStyle = '#6b4423'; ctx.beginPath();
+    ctx.moveTo(-s*0.4,-s*0.1); ctx.lineTo(0,-s*0.35); ctx.lineTo(s*0.4,-s*0.1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#b0a080'; ctx.fillRect(-s*0.1, -s*0.55, s*0.2, s*0.3);
+    ctx.fillStyle = '#6b4423'; ctx.beginPath();
+    ctx.moveTo(-s*0.12,-s*0.55); ctx.lineTo(0,-s*0.78); ctx.lineTo(s*0.12,-s*0.55); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#c4a44a'; ctx.lineWidth = s*0.025; ctx.beginPath();
+    ctx.moveTo(0,-s*0.85); ctx.lineTo(0,-s*0.73);
+    ctx.moveTo(-s*0.04,-s*0.8); ctx.lineTo(s*0.04,-s*0.8); ctx.stroke();
+    ctx.fillStyle = '#4a3020'; ctx.beginPath();
+    ctx.arc(0, s*0.1, s*0.07, Math.PI, 0);
+    ctx.lineTo(s*0.07, s*0.3); ctx.lineTo(-s*0.07, s*0.3); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+export function drawGuildHall(ctx, x, y, size, options = {}) {
+    const s = size; const bannerColor = options.bannerColor || '#aa2a2a';
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#9a8a70'; ctx.fillRect(-s*0.45, -s*0.2, s*0.9, s*0.5);
+    ctx.fillStyle = '#5a3a1a'; ctx.beginPath();
+    ctx.moveTo(-s*0.52,-s*0.2); ctx.lineTo(0,-s*0.55); ctx.lineTo(s*0.52,-s*0.2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c4a44a'; ctx.globalAlpha = 0.7;
+    for (let i=0;i<4;i++) ctx.fillRect(-s*0.35+i*s*0.2, -s*0.12, s*0.12, s*0.1);
+    ctx.globalAlpha = 1; ctx.fillStyle = '#4a3020'; ctx.fillRect(-s*0.08, s*0.05, s*0.16, s*0.15);
+    ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = s*0.02; ctx.beginPath();
+    ctx.moveTo(-s*0.35,-s*0.55); ctx.lineTo(-s*0.35,-s*0.2); ctx.stroke();
+    ctx.fillStyle = bannerColor; ctx.beginPath();
+    ctx.moveTo(-s*0.35,-s*0.55); ctx.lineTo(-s*0.2,-s*0.48); ctx.lineTo(-s*0.2,-s*0.38);
+    ctx.lineTo(-s*0.25,-s*0.41); ctx.lineTo(-s*0.35,-s*0.38); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+export function drawWarehouse(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#7a6a5a'; ctx.fillRect(-s*0.5, -s*0.15, s*1.0, s*0.45);
+    ctx.fillStyle = '#5a4a3a'; ctx.beginPath();
+    ctx.moveTo(-s*0.55,-s*0.15); ctx.lineTo(0,-s*0.3); ctx.lineTo(s*0.55,-s*0.15); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-s*0.15, 0, s*0.3, s*0.3);
+    ctx.fillStyle = '#6b4423'; ctx.fillRect(s*0.3, s*0.1, s*0.1, s*0.1); ctx.fillRect(s*0.35, 0, s*0.1, s*0.1);
+    ctx.restore();
+}
+
+export function drawWell(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.strokeStyle = '#6a6a6a'; ctx.lineWidth = s*0.12;
+    ctx.beginPath(); ctx.arc(0, 0, s*0.25, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = '#2a3a4a'; ctx.beginPath(); ctx.arc(0, 0, s*0.2, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = s*0.04; ctx.beginPath();
+    ctx.moveTo(-s*0.2,-s*0.1); ctx.lineTo(-s*0.2,-s*0.4);
+    ctx.moveTo(s*0.2,-s*0.1); ctx.lineTo(s*0.2,-s*0.4); ctx.stroke();
+    ctx.fillStyle = '#5a3a1a'; ctx.beginPath();
+    ctx.moveTo(-s*0.3,-s*0.4); ctx.lineTo(0,-s*0.55); ctx.lineTo(s*0.3,-s*0.4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+export function drawFountain(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#9a9a8a'; ctx.beginPath();
+    for (let i=0;i<8;i++) { const a=(i/8)*Math.PI*2; ctx[i===0?'moveTo':'lineTo'](Math.cos(a)*s*0.35,Math.sin(a)*s*0.35); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5a90b0'; ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.arc(0, 0, s*0.28, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#8a8a7a'; ctx.fillRect(-s*0.04, -s*0.15, s*0.08, s*0.3);
+    ctx.fillStyle = '#c4a44a'; ctx.beginPath(); ctx.arc(0, -s*0.18, s*0.05, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+}
+
+export function drawMarketStall(ctx, x, y, size, options = {}) {
+    const s = size; const color = options.color || '#c4873a';
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#6b4423'; ctx.fillRect(-s*0.35, s*0.0, s*0.7, s*0.15);
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(-s*0.4,-s*0.25); ctx.lineTo(s*0.4,-s*0.25); ctx.lineTo(s*0.35,s*0.05); ctx.lineTo(-s*0.35,s*0.05);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = s*0.03; ctx.beginPath();
+    ctx.moveTo(-s*0.35,-s*0.25); ctx.lineTo(-s*0.35,s*0.15);
+    ctx.moveTo(s*0.35,-s*0.25); ctx.lineTo(s*0.35,s*0.15); ctx.stroke();
+    ctx.restore();
+}
+
+export function drawWindmill(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#b0a080'; ctx.beginPath();
+    ctx.moveTo(-s*0.2,s*0.3); ctx.lineTo(-s*0.12,-s*0.25); ctx.lineTo(s*0.12,-s*0.25); ctx.lineTo(s*0.2,s*0.3);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5a4a3a'; ctx.beginPath();
+    ctx.moveTo(-s*0.15,-s*0.25); ctx.lineTo(0,-s*0.4); ctx.lineTo(s*0.15,-s*0.25); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#6b5a4a'; ctx.lineWidth = s*0.03; const bl = s*0.45;
+    for (let i=0;i<4;i++) { const a=(i/4)*Math.PI*2+0.3; ctx.beginPath(); ctx.moveTo(0,-s*0.3);
+        ctx.lineTo(Math.cos(a)*bl, -s*0.3+Math.sin(a)*bl); ctx.stroke(); }
+    ctx.fillStyle = '#4a3020'; ctx.fillRect(-s*0.06, s*0.12, s*0.12, s*0.18);
+    ctx.restore();
+}
+
+export function drawStatue(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#8a8a7a'; ctx.fillRect(-s*0.15, s*0.05, s*0.3, s*0.2);
+    ctx.fillRect(-s*0.2, s*0.2, s*0.4, s*0.08);
+    ctx.fillStyle = '#7a7a6a'; ctx.fillRect(-s*0.06, -s*0.2, s*0.12, s*0.25);
+    ctx.beginPath(); ctx.arc(0, -s*0.28, s*0.07, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#aaa89a'; ctx.lineWidth = s*0.02; ctx.beginPath();
+    ctx.moveTo(s*0.06,-s*0.12); ctx.lineTo(s*0.22,-s*0.45); ctx.stroke();
+    ctx.restore();
+}
+
+export function drawBarracks(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#6a5a4a'; ctx.fillRect(-s*0.55, -s*0.1, s*1.1, s*0.35);
+    ctx.fillStyle = '#4a3a2a'; ctx.beginPath();
+    ctx.moveTo(-s*0.6,-s*0.1); ctx.lineTo(-s*0.3,-s*0.3); ctx.lineTo(s*0.3,-s*0.3); ctx.lineTo(s*0.6,-s*0.1);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3a3a3a';
+    for (let i=0;i<5;i++) ctx.fillRect(-s*0.45+i*s*0.2, 0, s*0.08, s*0.08);
+    ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = s*0.02; ctx.beginPath();
+    ctx.moveTo(s*0.4,-s*0.5); ctx.lineTo(s*0.4,-s*0.1); ctx.stroke();
+    ctx.fillStyle = '#cc3333'; ctx.fillRect(s*0.4, -s*0.5, s*0.15, s*0.1);
+    ctx.restore();
+}
+
+export function drawLibrary(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#a09080'; ctx.fillRect(-s*0.4, -s*0.15, s*0.8, s*0.45);
+    ctx.fillStyle = '#c0b090';
+    for (const px of [-0.35,-0.15,0.09,0.29]) ctx.fillRect(px*s, -s*0.15, s*0.06, s*0.35);
+    ctx.fillStyle = '#8a7a6a'; ctx.beginPath();
+    ctx.moveTo(-s*0.42,-s*0.15); ctx.lineTo(0,-s*0.4); ctx.lineTo(s*0.42,-s*0.15); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c4a44a'; ctx.fillRect(-s*0.06, -s*0.28, s*0.12, s*0.08);
+    ctx.restore();
+}

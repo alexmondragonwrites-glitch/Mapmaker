@@ -803,3 +803,173 @@ export function drawTitleCartouche(ctx, x, y, title, subtitle, options = {}) {
 
     ctx.restore();
 }
+
+// ── Cloud/Fog Edge Effects ──────────────────────────────────────────
+
+/**
+ * Render atmospheric cloud wisps at map edges (RPG map style)
+ */
+export function renderCloudEdges(ctx, width, height, seed = 42, options = {}) {
+    const {
+        opacity = 0.6,
+        coverage = 0.15, // How far from edge clouds extend
+        color = 'rgba(240, 235, 220,',
+    } = options;
+
+    const noise = new SimplexNoise(seed + 5555);
+    const noise2 = new SimplexNoise(seed + 6666);
+
+    ctx.save();
+
+    const maxDist = Math.min(width, height) * coverage;
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            // Distance from nearest edge
+            const edgeDist = Math.min(x, y, width - x, height - y);
+
+            if (edgeDist > maxDist) continue;
+
+            // Cloud noise
+            const n1 = noise.fbm(x / 100, y / 100, 3, 2.0, 0.5);
+            const n2 = noise2.noise2D(x / 40, y / 40);
+
+            // Only draw where noise creates cloud shapes
+            const cloudShape = (n1 + 1) * 0.5;
+            if (cloudShape < 0.35) continue;
+
+            // Fade based on distance from edge
+            const edgeFade = 1 - (edgeDist / maxDist);
+            const alpha = edgeFade * edgeFade * cloudShape * opacity;
+
+            if (alpha < 0.02) continue;
+
+            // Wispy detail
+            const wispAlpha = clamp(alpha + n2 * 0.1, 0, 0.85);
+
+            ctx.fillStyle = `${color}${wispAlpha})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+
+    ctx.restore();
+}
+
+// ── Painted Forest Mass Rendering ───────────────────────────────────
+
+/**
+ * Render forests as dense painted masses (like reference RPG maps)
+ * instead of individual tree icons. Creates a layered, 3D-looking
+ * canopy effect with highlights and shadows.
+ */
+export function renderPaintedForests(ctx, width, height, heightMap, moistureMap, temperatureMap, seaLevel, mountainLevel, forestDensity, seed) {
+    const noise = new SimplexNoise(seed + 8888);
+    const noise2 = new SimplexNoise(seed + 9999);
+
+    // Pass 1: Build forest density map
+    const forestMap = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            const h = heightMap[idx];
+            const m = moistureMap[idx];
+
+            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
+
+            // Forest probability from moisture
+            let forestP = 0;
+            if (m > 0.4) {
+                forestP = (m - 0.4) * 2.5 * forestDensity;
+            }
+
+            // Noise modulation for clumping
+            const clumpNoise = (noise.fbm(x / 40, y / 40, 3) + 1) * 0.5;
+            forestP *= clumpNoise;
+
+            // Temperature influence
+            const t = temperatureMap ? temperatureMap[idx] : 0.5;
+            if (t < 0.15) forestP *= 0.3; // Tundra = sparse
+            if (t > 0.8 && m < 0.4) forestP *= 0.2; // Hot dry = sparse
+
+            forestMap[idx] = clamp(forestP, 0, 1);
+        }
+    }
+
+    // Pass 2: Render forest masses as layered canopy
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            const f = forestMap[idx];
+            if (f < 0.2) continue;
+
+            const pi = idx * 4;
+
+            // Forest color varies by density and noise
+            const n = noise2.noise2D(x / 12, y / 12);
+            const t = temperatureMap ? temperatureMap[idx] : 0.5;
+
+            // Base forest green (varies with temperature)
+            let fr, fg, fb;
+            if (t < 0.3) {
+                // Cold: darker, blue-green conifers
+                fr = 30 + n * 10;
+                fg = 55 + n * 12;
+                fb = 28 + n * 8;
+            } else if (t > 0.7) {
+                // Tropical: bright, warm green
+                fr = 25 + n * 10;
+                fg = 80 + n * 15;
+                fb = 18 + n * 8;
+            } else {
+                // Temperate: classic green
+                fr = 40 + n * 12;
+                fg = 85 + n * 15;
+                fb = 25 + n * 8;
+            }
+
+            // Canopy highlight (simulated top-lighting)
+            const highlight = noise.noise2D(x / 6, y / 6);
+            if (highlight > 0.3) {
+                fr += 15; fg += 20; fb += 5;
+            } else if (highlight < -0.3) {
+                // Shadow between tree crowns
+                fr -= 10; fg -= 12; fb -= 5;
+            }
+
+            // Blend with existing terrain based on forest density
+            const blend = clamp(f * 0.85, 0, 0.9);
+            data[pi]     = Math.round(data[pi] * (1 - blend) + fr * blend);
+            data[pi + 1] = Math.round(data[pi + 1] * (1 - blend) + fg * blend);
+            data[pi + 2] = Math.round(data[pi + 2] * (1 - blend) + fb * blend);
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    // Pass 3: Add tree crown outlines at forest edges for detail
+    ctx.save();
+    for (let y = 4; y < height - 4; y += 3) {
+        for (let x = 4; x < width - 4; x += 3) {
+            const idx = y * width + x;
+            const f = forestMap[idx];
+            if (f < 0.3) continue;
+
+            // Only draw crowns at forest edges and sparse areas
+            const fR = forestMap[idx + 2] || 0;
+            const fD = forestMap[(y + 2) * width + x] || 0;
+            const isEdge = Math.abs(f - fR) > 0.15 || Math.abs(f - fD) > 0.15;
+
+            if (isEdge || (f < 0.5 && noise.noise2D(x * 0.1, y * 0.1) > 0.2)) {
+                const crownSize = 3 + f * 4;
+                ctx.fillStyle = `rgba(25, 60, 15, ${0.15 + f * 0.15})`;
+                ctx.beginPath();
+                ctx.arc(x + noise.noise2D(x, y) * 2, y + noise2.noise2D(x, y) * 2, crownSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+    ctx.restore();
+}

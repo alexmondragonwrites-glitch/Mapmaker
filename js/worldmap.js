@@ -11,6 +11,7 @@ import {
     renderHillshading, renderHandDrawnCoastline, renderWaterWaves,
     drawBookMountain, drawBookTree, drawBookCity,
     drawBookBorder, drawBookCompass, drawTitleCartouche,
+    renderCloudEdges, renderPaintedForests,
 } from './bookstyle.js';
 import {
     generateAdvancedHeightMap, generateTemperatureMap, generateAdvancedMoistureMap,
@@ -186,11 +187,15 @@ export class WorldMapGenerator {
             });
         }
 
-        // Generate and render forests using Poisson disk for natural spacing
-        if (isBook) {
-            this._renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
-        } else {
+        // Render forests as painted masses (like reference RPG maps)
+        renderPaintedForests(ctx, cfg.width, cfg.height, heightMap, moistureMap,
+            temperatureMap, cfg.seaLevel, cfg.mountainLevel, cfg.forestDensity, cfg.seed);
+
+        // Optionally add individual trees at forest edges for detail
+        if (!isBook) {
             this._renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
+        } else {
+            this._renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         }
 
         // Generate and render mountains along ridges (not random grid)
@@ -248,10 +253,19 @@ export class WorldMapGenerator {
             this._renderTitle(ctx, cfg, names, loreHints);
         }
 
+        // ── Cloud/fog wisps at edges (all styles) ──
+        renderCloudEdges(ctx, cfg.width, cfg.height, cfg.seed, {
+            opacity: isBook ? 0.6 : 0.35,
+            coverage: isBook ? 0.12 : 0.08,
+        });
+
         // ── Book style: aging and vignette (applied last) ──
         if (isBook) {
             renderAgeEffects(ctx, cfg.width, cfg.height, cfg.seed, 0.5);
             renderVignette(ctx, cfg.width, cfg.height, 0.35);
+        } else {
+            // Subtle vignette for all styles
+            renderVignette(ctx, cfg.width, cfg.height, 0.15);
         }
 
         // Register clickable areas for zoom if zoom controller exists
