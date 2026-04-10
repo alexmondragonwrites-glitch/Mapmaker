@@ -1,0 +1,341 @@
+{
+  "name": "Calyndra",
+  "description": "Eine uralte Fantasywelt voller Magie, Geheimnisse und vergessener Reiche",
+  "meta": {
+    "author": "Alex Mondragon",
+    "version": "1.0",
+    "lastModified": "2026-04-10T00:00:00.000Z"
+  },
+  "regions": [
+    {
+      "id": "region_nordmark",
+      "name": "Nordmark",
+      "description": "Kalte, raue Lande im Norden, bewohnt von hartgesottenen Kriegern und Jägern",
+      "climate": "arktisch",
+      "terrain": "gebirge",
+      "relX": 0.5,
+      "relY": 0.15,
+      "relRadius": 0.18
+    },
+    {
+      "id": "region_silberwald",
+      "name": "Silberwald",
+      "description": "Ein uralter Elfenwald, dessen Bäume im Mondlicht silbern schimmern",
+      "climate": "gemäßigt",
+      "terrain": "wald",
+      "relX": 0.25,
+      "relY": 0.4,
+      "relRadius": 0.15
+    },
+    {
+      "id": "region_kronlande",
+      "name": "Die Kronlande",
+      "description": "Das Herz des Königreichs, fruchtbare Ebenen rund um die Hauptstadt",
+      "climate": "gemäßigt",
+      "terrain": "flachland",
+      "relX": 0.5,
+      "relY": 0.45,
+      "relRadius": 0.2
+    },
+    {
+      "id": "region_glutwueste",
+      "name": "Glutwüste",
+      "description": "Eine lebensfeindliche Wüste mit vulkanischer Aktivität und alten Ruinen",
+      "climate": "wüste",
+      "terrain": "flachland",
+      "relX": 0.75,
+      "relY": 0.7,
+      "relRadius": 0.15
+    },
+    {
+      "id": "region_nebelkueste",
+      "name": "Nebelküste",
+      "description": "Nebelverhangene Küstenregion mit mysteriösen Inseln und Piratenhäfen",
+      "climate": "gemäßigt",
+      "terrain": "küste",
+      "relX": 0.15,
+      "relY": 0.65,
+      "relRadius": 0.12
+    }
+  ],
+  "cities": [
+    {
+      "id": "city_kronheim",
+      "name": "Kronheim",
+      "description": "Die prächtige Hauptstadt des Königreichs, Sitz des Königs und des Hohen Rates",
+      "size": "capital",
+      "style": "human",
+      "isCapital": true,
+      "hasWalls": true,
+      "hasRiver": true,
+      "hasCastle": true,
+      "regionId": "region_kronlande",
+      "relX": 0.5,
+      "relY": 0.42,
+      "population": 85000,
+      "districts": ["Königsviertel", "Markthalle", "Hafendistrikt", "Akademie der Künste"],
+      "factionId": "faction_krone"
+    },
+    {
+      "id": "city_silberhain",
+      "name": "Silberhain",
+      "description": "Eine ätherische Elfenstadt, gebaut in und zwischen den uralten Bäumen des Silberwaldes",
+      "size": "city",
+      "style": "elven",
+      "isCapital": false,
+      "hasWalls": false,
+      "hasRiver": true,
+      "hasCastle": false,
+      "regionId": "region_silberwald",
+      "relX": 0.25,
+      "relY": 0.38,
+      "population": 12000,
+      "factionId": "faction_elfen"
+    },
+    {
+      "id": "city_eisenfeste",
+      "name": "Eisenfeste",
+      "description": "Eine mächtige Zwergenfestung tief in den Bergen der Nordmark",
+      "size": "city",
+      "style": "dwarven",
+      "isCapital": false,
+      "hasWalls": true,
+      "hasRiver": false,
+      "hasCastle": true,
+      "regionId": "region_nordmark",
+      "relX": 0.55,
+      "relY": 0.12,
+      "population": 25000,
+      "factionId": "faction_zwerge"
+    },
+    {
+      "id": "city_nebelhafen",
+      "name": "Nebelhafen",
+      "description": "Ein berüchtigter Hafenort, Umschlagplatz für Händler und Schmuggler",
+      "size": "town",
+      "style": "mixed",
+      "isCapital": false,
+      "hasWalls": true,
+      "hasRiver": false,
+      "hasCastle": false,
+      "regionId": "region_nebelkueste",
+      "relX": 0.12,
+      "relY": 0.62,
+      "population": 8000
+    },
+    {
+      "id": "city_glutstein",
+      "name": "Glutstein",
+      "description": "Eine befestigte Oasenstadt am Rand der Glutwüste",
+      "size": "town",
+      "style": "human",
+      "isCapital": false,
+      "hasWalls": true,
+      "hasRiver": false,
+      "hasCastle": true,
+      "regionId": "region_glutwueste",
+      "relX": 0.7,
+      "relY": 0.65,
+      "population": 5000
+    },
+    {
+      "id": "city_gruenthal",
+      "name": "Grünthal",
+      "description": "Ein friedliches Bauerndorf in den fruchtbaren Kronlanden",
+      "size": "village",
+      "style": "human",
+      "isCapital": false,
+      "hasWalls": false,
+      "hasRiver": true,
+      "hasCastle": false,
+      "regionId": "region_kronlande",
+      "relX": 0.42,
+      "relY": 0.52,
+      "population": 800
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "lm_drachenzahn",
+      "name": "Drachenzahn",
+      "type": "mountain",
+      "description": "Der höchste Gipfel der Nordmark, sagenumwoben und angeblich Heimat eines uralten Drachen",
+      "regionId": "region_nordmark",
+      "relX": 0.48,
+      "relY": 0.08
+    },
+    {
+      "id": "lm_glutschlund",
+      "name": "Glutschlund",
+      "type": "volcano",
+      "description": "Ein aktiver Vulkan im Herzen der Glutwüste",
+      "regionId": "region_glutwueste",
+      "relX": 0.8,
+      "relY": 0.75
+    },
+    {
+      "id": "lm_ewiger_hain",
+      "name": "Der Ewige Hain",
+      "type": "forest",
+      "description": "Das mystische Zentrum des Silberwaldes, wo die ältesten Bäume stehen",
+      "regionId": "region_silberwald",
+      "relX": 0.22,
+      "relY": 0.35
+    },
+    {
+      "id": "lm_traumsee",
+      "name": "Traumsee",
+      "type": "lake",
+      "description": "Ein kristallklarer See, dessen Wasser angeblich Visionen schenkt",
+      "regionId": "region_kronlande",
+      "relX": 0.55,
+      "relY": 0.5
+    },
+    {
+      "id": "lm_ruinen_althar",
+      "name": "Ruinen von Althar",
+      "type": "ruins",
+      "description": "Überreste einer längst vergessenen Zivilisation, voller Fallen und Schätze",
+      "regionId": "region_glutwueste",
+      "relX": 0.72,
+      "relY": 0.72
+    },
+    {
+      "id": "lm_schattenhöhle",
+      "name": "Schattenhöhle",
+      "type": "cave",
+      "description": "Ein weitverzweigtes Höhlensystem unter der Nordmark",
+      "regionId": "region_nordmark",
+      "relX": 0.52,
+      "relY": 0.18
+    }
+  ],
+  "rivers": [
+    {
+      "id": "river_silberstrom",
+      "name": "Silberstrom",
+      "description": "Der längste Fluss Calyndras, fließt vom Drachenzahn bis zur Nebelküste",
+      "startRegionId": "region_nordmark",
+      "endRegionId": "region_nebelkueste"
+    },
+    {
+      "id": "river_kronfluss",
+      "name": "Kronfluss",
+      "description": "Durchfließt die Hauptstadt Kronheim und die fruchtbaren Kronlande",
+      "startRegionId": "region_kronlande",
+      "endRegionId": "region_nebelkueste"
+    },
+    {
+      "id": "river_elfentraene",
+      "name": "Elfenträne",
+      "description": "Ein schmaler, kristallklarer Fluss durch den Silberwald",
+      "startRegionId": "region_silberwald",
+      "endRegionId": "region_kronlande"
+    }
+  ],
+  "roads": [
+    {
+      "id": "road_koenigsweg",
+      "name": "Königsweg",
+      "description": "Die Haupthandelsroute des Reiches",
+      "fromCityId": "city_kronheim",
+      "toCityId": "city_eisenfeste"
+    },
+    {
+      "id": "road_silberpfad",
+      "name": "Silberpfad",
+      "description": "Ein alter Elfenpfad durch den Wald",
+      "fromCityId": "city_kronheim",
+      "toCityId": "city_silberhain"
+    },
+    {
+      "id": "road_handelsstrasse",
+      "name": "Handelsstraße",
+      "description": "Wichtige Handelsroute zum Hafen",
+      "fromCityId": "city_kronheim",
+      "toCityId": "city_nebelhafen"
+    },
+    {
+      "id": "road_wuestenweg",
+      "name": "Wüstenweg",
+      "description": "Ein gefährlicher Pfad durch die Glutwüste",
+      "fromCityId": "city_kronheim",
+      "toCityId": "city_glutstein"
+    }
+  ],
+  "factions": [
+    {
+      "id": "faction_krone",
+      "name": "Die Krone von Calyndra",
+      "description": "Das herrschende Königshaus und sein Adel",
+      "color": "#c4873a"
+    },
+    {
+      "id": "faction_elfen",
+      "name": "Der Elfenrat",
+      "description": "Die weisen Herrscher des Silberwaldes",
+      "color": "#4a9a4a"
+    },
+    {
+      "id": "faction_zwerge",
+      "name": "Die Eisenkönige",
+      "description": "Die Zwergenclans der Nordmark",
+      "color": "#8a6a4a"
+    },
+    {
+      "id": "faction_schatten",
+      "name": "Die Schattenbruderschaft",
+      "description": "Eine geheime Gilde von Dieben und Spionen",
+      "color": "#4a2a4a"
+    },
+    {
+      "id": "faction_magier",
+      "name": "Der Arkane Zirkel",
+      "description": "Ein Orden mächtiger Magier, die über magisches Wissen wachen",
+      "color": "#4a6a9a"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "npc_koenig",
+      "name": "König Aldric III.",
+      "role": "König von Calyndra",
+      "description": "Ein gerechter aber alternder Herrscher, besorgt um die Zukunft seines Reiches",
+      "cityId": "city_kronheim"
+    },
+    {
+      "id": "npc_elara",
+      "name": "Elara Silberblatt",
+      "role": "Hohepriesterin des Silberwaldes",
+      "description": "Eine uralte Elfenmagierin, Hüterin des Ewigen Hains",
+      "cityId": "city_silberhain"
+    },
+    {
+      "id": "npc_thorin",
+      "name": "Thorin Eisenhand",
+      "role": "Zwergenkönig der Eisenfeste",
+      "description": "Ein stolzer Krieger und meisterhafter Schmied",
+      "cityId": "city_eisenfeste"
+    },
+    {
+      "id": "npc_mirka",
+      "name": "Mirka die Schlaue",
+      "role": "Hafenmeisterin von Nebelhafen",
+      "description": "Eine gerissene Händlerin mit Verbindungen zur Schattenbruderschaft",
+      "cityId": "city_nebelhafen"
+    },
+    {
+      "id": "npc_zara",
+      "name": "Zara Glutwind",
+      "role": "Wächterin von Glutstein",
+      "description": "Eine mächtige Feuermagierin, die die Oasenstadt beschützt",
+      "cityId": "city_glutstein"
+    },
+    {
+      "id": "npc_wanderer",
+      "name": "Der Namenlose Wanderer",
+      "role": "Mysteriöser Reisender",
+      "description": "Ein geheimnisvoller Fremder, der überall und nirgends auftaucht"
+    }
+  ]
+}
