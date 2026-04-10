@@ -6,6 +6,12 @@
 import { SimplexNoise } from './noise.js';
 import { NameGenerator, PALETTES, SeededRandom, clamp, smoothstep, distance, lerpColor } from './utils.js';
 import { drawMountain, drawVolcano, drawTree, drawRiver, drawCastle, drawCompassRose, drawMapBorder, drawScaleBar } from './assets.js';
+import {
+    renderParchmentTexture, renderAgeEffects, renderVignette,
+    renderHillshading, renderHandDrawnCoastline, renderWaterWaves,
+    drawBookMountain, drawBookTree, drawBookCity,
+    drawBookBorder, drawBookCompass, drawTitleCartouche,
+} from './bookstyle.js';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -36,7 +42,7 @@ export class WorldMapGenerator {
             showCompass: true,
             showBorder: true,
             showScaleBar: true,
-            mapStyle: 'colored', // 'colored' | 'parchment'
+            mapStyle: 'colored', // 'colored' | 'parchment' | 'book'
             continentShape: 'natural', // 'natural' | 'island' | 'pangaea'
         };
     }
@@ -63,6 +69,7 @@ export class WorldMapGenerator {
             { type: 'select', key: 'mapStyle', label: 'Stil', options: [
                 { value: 'colored', label: 'Farbig' },
                 { value: 'parchment', label: 'Pergament' },
+                { value: 'book', label: 'Buchstil (Hochwertig)' },
             ]},
             { type: 'select', key: 'continentShape', label: 'Kontinentform', options: [
                 { value: 'natural', label: 'Natürlich' },
@@ -96,11 +103,43 @@ export class WorldMapGenerator {
         // Generate moisture map
         const moistureMap = this._generateMoistureMap(cfg, noise2);
 
+        // Is this the book-quality style?
+        const isBook = cfg.mapStyle === 'book';
+
+        // ── Book style: parchment base ──
+        if (isBook) {
+            renderParchmentTexture(ctx, cfg.width, cfg.height, cfg.seed);
+        }
+
         // Render terrain
-        if (cfg.mapStyle === 'parchment') {
+        if (isBook) {
+            this._renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap);
+        } else if (cfg.mapStyle === 'parchment') {
             this._renderParchmentStyle(ctx, cfg, heightMap, moistureMap);
         } else {
             this._renderColoredStyle(ctx, cfg, heightMap, moistureMap);
+        }
+
+        // ── Book style: hillshading ──
+        if (isBook) {
+            renderHillshading(ctx, cfg.width, cfg.height, heightMap, {
+                strength: 0.35,
+                ambient: 0.35,
+            });
+        } else if (cfg.mapStyle === 'colored') {
+            // Subtle hillshading for colored mode too
+            renderHillshading(ctx, cfg.width, cfg.height, heightMap, {
+                strength: 0.2,
+                ambient: 0.4,
+            });
+        }
+
+        // ── Book style: water wave pattern ──
+        if (isBook) {
+            renderWaterWaves(ctx, cfg.width, cfg.height, heightMap, cfg.seaLevel, {
+                waveSpacing: 6,
+                waveColor: 'rgba(40, 60, 100, 0.25)',
+            });
         }
 
         // Render lore region overlays (subtle borders/labels)
@@ -117,11 +156,28 @@ export class WorldMapGenerator {
             this._renderLoreRiverLabels(ctx, cfg, rivers, loreHints.rivers);
         }
 
-        // Generate and render forests
-        this._renderForests(ctx, cfg, heightMap, moistureMap, noise, rng);
+        // ── Book style: hand-drawn coastline ──
+        if (isBook) {
+            renderHandDrawnCoastline(ctx, cfg.width, cfg.height, heightMap, cfg.seaLevel, {
+                hachureLines: true,
+                hachureLength: 8,
+                hachureDensity: 0.12,
+            });
+        }
 
-        // Generate and render mountains
-        this._renderMountainIcons(ctx, cfg, heightMap, rng);
+        // Generate and render forests (use book style if enabled)
+        if (isBook) {
+            this._renderBookForests(ctx, cfg, heightMap, moistureMap, noise, rng);
+        } else {
+            this._renderForests(ctx, cfg, heightMap, moistureMap, noise, rng);
+        }
+
+        // Generate and render mountains (use book style if enabled)
+        if (isBook) {
+            this._renderBookMountains(ctx, cfg, heightMap, rng);
+        } else {
+            this._renderMountainIcons(ctx, cfg, heightMap, rng);
+        }
 
         // Render lore landmarks (named mountains, forests, etc.)
         if (loreHints && loreHints.landmarks.length > 0) {
@@ -130,23 +186,51 @@ export class WorldMapGenerator {
 
         // Generate cities - use lore cities if available
         const cities = this._generateCities(cfg, heightMap, rivers, rng, names, loreHints);
-        this._renderCities(ctx, cfg, cities);
 
         // Render roads between cities (use lore roads if available)
         this._renderRoads(ctx, cfg, cities, heightMap, loreHints);
+
+        // Render cities (book style or normal)
+        if (isBook) {
+            this._renderBookCities(ctx, cfg, cities);
+        } else {
+            this._renderCities(ctx, cfg, cities);
+        }
 
         // Labels
         if (cfg.showLabels) {
             this._renderLabels(ctx, cfg, cities, rivers, names, rng);
         }
 
-        // Decorations
-        if (cfg.showBorder) drawMapBorder(ctx, cfg.width, cfg.height, 'ornate');
-        if (cfg.showCompass) drawCompassRose(ctx, cfg.width - 80, cfg.height - 80, 60);
-        if (cfg.showScaleBar) drawScaleBar(ctx, cfg.width * 0.05, cfg.height - 40, cfg.width);
+        // Decorations (book style uses dedicated ornate versions)
+        if (isBook) {
+            if (cfg.showBorder) drawBookBorder(ctx, cfg.width, cfg.height);
+            if (cfg.showCompass) drawBookCompass(ctx, cfg.width - 80, cfg.height - 80, 60);
+            if (cfg.showScaleBar) drawScaleBar(ctx, cfg.width * 0.05, cfg.height - 50, cfg.width);
+        } else {
+            if (cfg.showBorder) drawMapBorder(ctx, cfg.width, cfg.height, 'ornate');
+            if (cfg.showCompass) drawCompassRose(ctx, cfg.width - 80, cfg.height - 80, 60);
+            if (cfg.showScaleBar) drawScaleBar(ctx, cfg.width * 0.05, cfg.height - 40, cfg.width);
+        }
 
-        // Title - use world name from lore if available
-        this._renderTitle(ctx, cfg, names, loreHints);
+        // Title
+        if (isBook) {
+            const title = loreHints?.worldName || 'Calyndra';
+            const subtitle = loreHints?.worldDescription
+                ? loreHints.worldDescription.slice(0, 60) + (loreHints.worldDescription.length > 60 ? '...' : '')
+                : 'Eine Fantasywelt';
+            drawTitleCartouche(ctx, cfg.width / 2, cfg.height * 0.04 + 20, title, subtitle, {
+                fontSize: Math.max(20, cfg.width * 0.022),
+            });
+        } else {
+            this._renderTitle(ctx, cfg, names, loreHints);
+        }
+
+        // ── Book style: aging and vignette (applied last) ──
+        if (isBook) {
+            renderAgeEffects(ctx, cfg.width, cfg.height, cfg.seed, 0.5);
+            renderVignette(ctx, cfg.width, cfg.height, 0.35);
+        }
 
         // Register clickable areas for zoom if zoom controller exists
         if (_zoomController) {
@@ -483,7 +567,8 @@ export class WorldMapGenerator {
     }
 
     _renderRivers(ctx, cfg, rivers, style) {
-        const color = style === 'parchment' ? PALETTES.parchment.water : '#4a90c4';
+        const color = style === 'book' ? 'rgba(40, 65, 105, 0.7)' :
+                      style === 'parchment' ? PALETTES.parchment.water : '#4a90c4';
 
         for (const river of rivers) {
             // River gets wider as it flows
@@ -699,16 +784,19 @@ export class WorldMapGenerator {
     _renderRoads(ctx, cfg, cities, heightMap, loreHints) {
         if (cities.length < 2) return;
 
-        ctx.strokeStyle = cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
+        const isBook = cfg.mapStyle === 'book';
+        ctx.strokeStyle = isBook ? 'rgba(35, 25, 15, 0.45)' :
+            cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
+        ctx.lineWidth = isBook ? 1 : 1.5;
+        ctx.setLineDash(isBook ? [3, 5] : [4, 4]);
 
         // Draw lore-defined roads first (thicker, with names)
         if (loreHints && loreHints.roads.length > 0) {
             ctx.save();
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash([6, 3]);
-            ctx.strokeStyle = cfg.mapStyle === 'parchment' ? '#6a5a4a' : '#7a6a4a';
+            ctx.lineWidth = isBook ? 1.5 : 2.5;
+            ctx.setLineDash(isBook ? [4, 4] : [6, 3]);
+            ctx.strokeStyle = isBook ? 'rgba(35, 25, 15, 0.5)' :
+                cfg.mapStyle === 'parchment' ? '#6a5a4a' : '#7a6a4a';
 
             for (const road of loreHints.roads) {
                 const fromCity = cities.find(c => c.loreId === road.fromCityId || c.name === road.fromCityId);
@@ -768,9 +856,10 @@ export class WorldMapGenerator {
     }
 
     _renderLabels(ctx, cfg, cities, rivers, names, rng) {
-        const isParchment = cfg.mapStyle === 'parchment';
-        const textColor = isParchment ? PALETTES.parchment.ink : '#1a1a1a';
-        const shadowColor = isParchment ? 'transparent' : 'rgba(255,255,255,0.7)';
+        const isBook = cfg.mapStyle === 'book';
+        const isParchment = cfg.mapStyle === 'parchment' || isBook;
+        const textColor = isParchment ? 'rgba(35, 25, 15, 0.9)' : '#1a1a1a';
+        const shadowColor = isBook ? 'transparent' : (isParchment ? 'transparent' : 'rgba(255,255,255,0.7)');
 
         // City labels
         for (const city of cities) {
@@ -935,6 +1024,115 @@ export class WorldMapGenerator {
             ctx.fillText(label, lx, ly + yOffset);
         }
         ctx.restore();
+    }
+
+    // ── Book-Style Rendering Methods ─────────────────────────────────
+
+    _renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap) {
+        const { width, height, seaLevel, mountainLevel } = cfg;
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const idx = y * width + x;
+                const h = heightMap[idx];
+                const m = moistureMap[idx];
+                const pi = idx * 4;
+
+                if (h < seaLevel) {
+                    // Water - subtle blue-green tint on parchment
+                    const depth = (seaLevel - h) / seaLevel;
+                    const t = 0.15 + depth * 0.25;
+                    data[pi] = Math.round(data[pi] * (1 - t) + 90 * t);
+                    data[pi + 1] = Math.round(data[pi + 1] * (1 - t) + 120 * t);
+                    data[pi + 2] = Math.round(data[pi + 2] * (1 - t) + 150 * t);
+                } else if (h < seaLevel + 0.03) {
+                    // Beach - slight golden tint
+                    data[pi] = Math.min(255, data[pi] + 5);
+                    data[pi + 1] = Math.max(0, data[pi + 1] - 5);
+                    data[pi + 2] = Math.max(0, data[pi + 2] - 10);
+                } else if (h < mountainLevel) {
+                    // Land - very subtle tinting based on moisture
+                    const landH = (h - seaLevel) / (mountainLevel - seaLevel);
+                    if (m > 0.55) {
+                        // Forest areas - slight green undertone
+                        const t = 0.06 * (m - 0.55) * 4;
+                        data[pi] = Math.max(0, data[pi] - data[pi] * t * 0.3);
+                        data[pi + 1] = Math.min(255, data[pi + 1] + 3);
+                        data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * t * 0.2);
+                    }
+                    // Slight darkening at higher elevations
+                    const altDarken = landH * 0.05;
+                    data[pi] = Math.max(0, data[pi] - data[pi] * altDarken);
+                    data[pi + 1] = Math.max(0, data[pi + 1] - data[pi + 1] * altDarken);
+                    data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * altDarken);
+                } else {
+                    // Mountains - darken parchment
+                    const t = 0.12;
+                    data[pi] = Math.max(0, data[pi] - data[pi] * t);
+                    data[pi + 1] = Math.max(0, data[pi + 1] - data[pi + 1] * t);
+                    data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * t);
+                }
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    _renderBookForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
+        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
+        const treeSpacing = 10;
+
+        for (let y = treeSpacing; y < height - treeSpacing; y += treeSpacing) {
+            for (let x = treeSpacing; x < width - treeSpacing; x += treeSpacing) {
+                const idx = y * width + x;
+                const h = heightMap[idx];
+                const m = moistureMap[idx];
+
+                if (h <= seaLevel || h >= mountainLevel * 0.9) continue;
+                if (m < 0.45) continue;
+
+                const forestChance = (m - 0.45) * 2 * forestDensity;
+                if (rng.next() > forestChance) continue;
+
+                const offsetX = rng.nextFloat(-3, 3);
+                const offsetY = rng.nextFloat(-3, 3);
+                const size = rng.nextFloat(5, 8);
+                const type = rng.next() > 0.4 ? 'deciduous' : 'pine';
+
+                drawBookTree(ctx, x + offsetX, y + offsetY, size, { type });
+            }
+        }
+    }
+
+    _renderBookMountains(ctx, cfg, heightMap, rng) {
+        const { width, height, mountainLevel } = cfg;
+        const spacing = 18;
+
+        for (let y = spacing; y < height - spacing; y += spacing) {
+            for (let x = spacing; x < width - spacing; x += spacing) {
+                const h = heightMap[y * width + x];
+                if (h < mountainLevel) continue;
+
+                const offsetX = rng.nextFloat(-4, 4);
+                const offsetY = rng.nextFloat(-4, 4);
+                const size = 14 + (h - mountainLevel) * 50;
+
+                drawBookMountain(ctx, x + offsetX, y + offsetY, size, {
+                    snow: h > 0.78,
+                });
+            }
+        }
+    }
+
+    _renderBookCities(ctx, cfg, cities) {
+        for (const city of cities) {
+            const size = city.isCapital || city.size === 'large' ? 16 : (city.size === 'medium' ? 11 : 8);
+            drawBookCity(ctx, city.x, city.y, size, {
+                isCapital: city.isCapital || city.size === 'large',
+            });
+        }
     }
 
     _hexToRgbFast(hex) {
