@@ -40,11 +40,22 @@
     "src/engine/assets-runtime/types.ts",
     "src/engine/assets-runtime/classifier.ts",
 
+    // Standalone utilities - used by everything but imports nothing
+    "src/utils/index.ts",
+
     // React hooks that are small and strict-clean by construction
     "src/hooks/useDebouncedValue.ts",
 
     // As files are migrated, add them here. Keep the list alphabetised
     // within each section.
+    //
+    // Known-clean files that are NOT yet in this list because they
+    // pull in transitive dependencies that still need migration:
+    //   - src/engine/generators/worldmap/styles.ts
+    //     → blocked by src/engine/terrain.ts (implicit-any params)
+    //
+    // When terrain.ts is migrated, move the blocked files above
+    // into the include list.
   ],
   // Exclude the main test/build-info paths from the inherited config
   // so we don't accidentally pull in the whole src/ tree

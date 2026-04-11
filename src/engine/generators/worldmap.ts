@@ -23,6 +23,12 @@ import {
     generateRiverSystems, classifyBiome, getBiomeColor, BIOME_COLORS,
     poissonDiskSample, findMountainRidges,
 } from '../terrain';
+import {
+    renderColoredStyle,
+    renderParchmentStyle,
+    renderWonderdraftStyle,
+    renderBookTerrainOverlay,
+} from './worldmap/styles';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -137,21 +143,23 @@ export class WorldMapGenerator {
         if (isBook) {
             renderParchmentTexture(ctx, cfg.width, cfg.height, cfg.seed);
         } else if (isWonderdraft) {
-            // Wonderdraft assets look best on a warm, textured cream
-            // background. Reuse the parchment generator but with a
-            // lighter, less aged tone so the assets contrast well.
-            this._renderWonderdraftBase(ctx, cfg, heightMap, moistureMap);
+            // Wonderdraft assets look best on a warm cream background.
+            renderWonderdraftStyle(ctx, cfg, heightMap, moistureMap);
         }
 
         // Render terrain
         if (isBook) {
-            this._renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap);
+            renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap);
         } else if (isWonderdraft) {
-            // Terrain already drawn by _renderWonderdraftBase above
+            // Terrain already drawn by renderWonderdraftStyle above
         } else if (cfg.mapStyle === 'parchment') {
-            this._renderParchmentStyle(ctx, cfg, heightMap, moistureMap);
+            renderParchmentStyle(ctx, cfg, heightMap);
         } else {
-            this._renderColoredStyle(ctx, cfg, heightMap, moistureMap);
+            // Colored style returns the (new or cached) temperature map
+            // so later passes that also need it can reuse it
+            this._lastTempMap = renderColoredStyle(
+                ctx, cfg, heightMap, moistureMap, this._lastTempMap ?? null,
+            );
         }
 
         // ── Hillshading ──
@@ -423,208 +431,10 @@ export class WorldMapGenerator {
         return map;
     }
 
-    _renderColoredStyle(ctx, cfg, heightMap, moistureMap) {
-        const { width, height, seaLevel, mountainLevel } = cfg;
-        const imageData = ctx.createImageData(width, height);
-        const data = imageData.data;
-
-        // Use temperature map for biome classification
-        const tempMap = this._lastTempMap || generateTemperatureMap(width, height, heightMap, seaLevel, cfg.seed);
-        this._lastTempMap = tempMap;
-
-        // Micro-variation noise for natural look
-        const microNoise = new SimplexNoise(cfg.seed + 9999);
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const m = moistureMap[idx];
-                const t = tempMap[idx];
-                const pi = idx * 4;
-
-                // Classify biome using temperature + moisture
-                const biome = classifyBiome(h, m, t, seaLevel, mountainLevel);
-
-                // Per-pixel micro-variation (prevents flat color blocks)
-                const microVal = microNoise.noise2D(x / 8, y / 8) * 0.5
-                    + microNoise.noise2D(x / 30, y / 30) * 0.3
-                    + microNoise.noise2D(x / 80, y / 80) * 0.2;
-
-                const color = getBiomeColor(biome.biome, microVal);
-
-                data[pi] = color.r;
-                data[pi + 1] = color.g;
-                data[pi + 2] = color.b;
-                data[pi + 3] = 255;
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-    }
-
-    _renderParchmentStyle(ctx, cfg, heightMap, moistureMap) {
-        const { width, height, seaLevel, mountainLevel } = cfg;
-        const pal = PALETTES.parchment;
-
-        // Fill with parchment background
-        ctx.fillStyle = pal.bg;
-        ctx.fillRect(0, 0, width, height);
-
-        // Draw coastlines and terrain with parchment style
-        const imageData = ctx.createImageData(width, height);
-        const data = imageData.data;
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const pi = idx * 4;
-
-                if (h < seaLevel) {
-                    // Water - blue tint on parchment
-                    const c = this._hexToRgbFast(pal.water);
-                    const bgC = this._hexToRgbFast(pal.bg);
-                    const t = 0.3 + (seaLevel - h) * 0.5;
-                    data[pi] = bgC[0] * (1 - t) + c[0] * t;
-                    data[pi + 1] = bgC[1] * (1 - t) + c[1] * t;
-                    data[pi + 2] = bgC[2] * (1 - t) + c[2] * t;
-                } else {
-                    // Land - parchment base with subtle height shading
-                    const c = this._hexToRgbFast(pal.bg);
-                    const shade = 1 - (h - seaLevel) * 0.15;
-                    data[pi] = c[0] * shade;
-                    data[pi + 1] = c[1] * shade;
-                    data[pi + 2] = c[2] * shade;
-                }
-                data[pi + 3] = 255;
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        // Draw coastline contour
-        ctx.strokeStyle = pal.ink;
-        ctx.lineWidth = 1.5;
-        this._drawContourLine(ctx, cfg, heightMap, seaLevel);
-    }
-
-    /**
-     * Wonderdraft-style base rendering. This is a different look than
-     * both the colored and parchment modes: it aims to match the warm,
-     * slightly desaturated look of hand-drawn commercial fantasy maps
-     * so the Wonderdraft PNG assets (buildings, mountains, trees) sit
-     * naturally on top.
-     *
-     * Key differences from parchment / colored:
-     *   - Land base is a warm cream (not parchment brown) so assets pop
-     *   - Water is a soft teal-green, not royal blue
-     *   - Biomes are muted: no saturated forest greens, no deep reds
-     *   - Coastlines are softer gradients, not hard lines
-     *   - Mountains/hills are only hinted at via hillshading - the
-     *     Wonderdraft assets carry the actual visual weight
-     */
-    _renderWonderdraftBase(ctx, cfg, heightMap, moistureMap) {
-        const { width, height, seaLevel, mountainLevel } = cfg;
-
-        // Wonderdraft-style base palette. Lightly warmer and cleaner
-        // than the PALETTES.parchment values.
-        const P = {
-            deepWater:    [ 62, 104, 120 ],  // dusty teal
-            shallowWater: [108, 160, 172 ],  // lighter teal
-            sand:         [218, 200, 158 ],  // warm dune
-            grass:        [186, 188, 122 ],  // muted sage
-            forestHint:   [140, 158,  98 ],  // darker sage (no asset, just tone)
-            drylands:     [202, 184, 124 ],  // savanna cream
-            mountainHint: [168, 156, 128 ],  // warm stone
-            snow:         [234, 230, 218 ],  // cream white
-        };
-
-        const imageData = ctx.createImageData(width, height);
-        const data = imageData.data;
-
-        const lerp3 = (a: number[], b: number[], t: number): number[] => [
-            a[0] + (b[0] - a[0]) * t,
-            a[1] + (b[1] - a[1]) * t,
-            a[2] + (b[2] - a[2]) * t,
-        ];
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const m = moistureMap[idx];
-                const pi = idx * 4;
-
-                let rgb: number[];
-
-                if (h < seaLevel) {
-                    // Water: interpolate by depth from deep teal to shallow
-                    const depth = (seaLevel - h) / seaLevel;
-                    const t = Math.max(0, Math.min(1, depth * 1.3));
-                    rgb = lerp3(P.shallowWater, P.deepWater, t);
-                } else if (h < seaLevel + 0.03) {
-                    // Beach band
-                    rgb = P.sand;
-                } else if (h < mountainLevel) {
-                    // Land: blend between biomes by moisture, keep it muted
-                    const landT = (h - seaLevel) / (mountainLevel - seaLevel);
-                    if (m > 0.55) {
-                        // Moist - drift toward the forest hint tone
-                        rgb = lerp3(P.grass, P.forestHint, Math.min(1, (m - 0.55) * 2));
-                    } else if (m > 0.25) {
-                        // Normal grass lands
-                        rgb = P.grass;
-                    } else {
-                        // Dry - drift toward drylands
-                        rgb = lerp3(P.grass, P.drylands, Math.min(1, (0.25 - m) * 2));
-                    }
-                    // Subtle elevation darkening (asset shadow bleed will
-                    // handle the rest)
-                    const dim = 1 - landT * 0.08;
-                    rgb = [rgb[0] * dim, rgb[1] * dim, rgb[2] * dim];
-                } else {
-                    // Mountains: warm stone, slightly lighter at peaks
-                    const peakT = Math.min(1, (h - mountainLevel) / 0.2);
-                    rgb = lerp3(P.mountainHint, P.snow, peakT * 0.5);
-                }
-
-                data[pi]     = Math.max(0, Math.min(255, rgb[0]));
-                data[pi + 1] = Math.max(0, Math.min(255, rgb[1]));
-                data[pi + 2] = Math.max(0, Math.min(255, rgb[2]));
-                data[pi + 3] = 255;
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        // Soft coastline fade: a thin sand ring just above sea level
-        // gives the classic hand-drawn coastline halo
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.strokeStyle = 'rgb(218, 200, 158)';
-        ctx.lineWidth = 3;
-        this._drawContourLine(ctx, cfg, heightMap, seaLevel + 0.005);
-        ctx.restore();
-    }
-
-    _drawContourLine(ctx, cfg, heightMap, level) {
-        const { width, height } = cfg;
-
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const h = heightMap[y * width + x];
-                const hR = heightMap[y * width + x + 1];
-                const hD = heightMap[(y + 1) * width + x];
-
-                if ((h >= level && hR < level) || (h < level && hR >= level) ||
-                    (h >= level && hD < level) || (h < level && hD >= level)) {
-                    ctx.fillStyle = 'rgba(42, 26, 10, 0.6)';
-                    ctx.fillRect(x, y, 1, 1);
-                }
-            }
-        }
-    }
+    // Style renderers moved to ./worldmap/styles.ts
+    // Kept as a comment for greppability: _renderColoredStyle,
+    // _renderParchmentStyle, _renderWonderdraftBase,
+    // _renderBookTerrainOverlay, _drawContourLine
 
     _generateRivers(cfg, heightMap, rng) {
         const { width, height, seaLevel, mountainLevel, riverCount } = cfg;
@@ -1161,57 +971,7 @@ export class WorldMapGenerator {
 
     // ── Book-Style Rendering Methods ─────────────────────────────────
 
-    _renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap) {
-        const { width, height, seaLevel, mountainLevel } = cfg;
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const m = moistureMap[idx];
-                const pi = idx * 4;
-
-                if (h < seaLevel) {
-                    // Water - subtle blue-green tint on parchment
-                    const depth = (seaLevel - h) / seaLevel;
-                    const t = 0.15 + depth * 0.25;
-                    data[pi] = Math.round(data[pi] * (1 - t) + 90 * t);
-                    data[pi + 1] = Math.round(data[pi + 1] * (1 - t) + 120 * t);
-                    data[pi + 2] = Math.round(data[pi + 2] * (1 - t) + 150 * t);
-                } else if (h < seaLevel + 0.03) {
-                    // Beach - slight golden tint
-                    data[pi] = Math.min(255, data[pi] + 5);
-                    data[pi + 1] = Math.max(0, data[pi + 1] - 5);
-                    data[pi + 2] = Math.max(0, data[pi + 2] - 10);
-                } else if (h < mountainLevel) {
-                    // Land - very subtle tinting based on moisture
-                    const landH = (h - seaLevel) / (mountainLevel - seaLevel);
-                    if (m > 0.55) {
-                        // Forest areas - slight green undertone
-                        const t = 0.06 * (m - 0.55) * 4;
-                        data[pi] = Math.max(0, data[pi] - data[pi] * t * 0.3);
-                        data[pi + 1] = Math.min(255, data[pi + 1] + 3);
-                        data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * t * 0.2);
-                    }
-                    // Slight darkening at higher elevations
-                    const altDarken = landH * 0.05;
-                    data[pi] = Math.max(0, data[pi] - data[pi] * altDarken);
-                    data[pi + 1] = Math.max(0, data[pi + 1] - data[pi + 1] * altDarken);
-                    data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * altDarken);
-                } else {
-                    // Mountains - darken parchment
-                    const t = 0.12;
-                    data[pi] = Math.max(0, data[pi] - data[pi] * t);
-                    data[pi + 1] = Math.max(0, data[pi + 1] - data[pi + 1] * t);
-                    data[pi + 2] = Math.max(0, data[pi + 2] - data[pi + 2] * t);
-                }
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-    }
+    // _renderBookTerrainOverlay moved to ./worldmap/styles.ts
 
     _renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng) {
         const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
@@ -1410,11 +1170,4 @@ export class WorldMapGenerator {
         }
     }
 
-    _hexToRgbFast(hex) {
-        return [
-            parseInt(hex.slice(1, 3), 16),
-            parseInt(hex.slice(3, 5), 16),
-            parseInt(hex.slice(5, 7), 16),
-        ];
-    }
 }
