@@ -342,18 +342,29 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
-    overflow: auto;
+    padding: 0;
+    overflow: hidden;
+    /* Used as hover cursor fallback; child handlers override for tokens */
+    cursor: grab;
+    position: relative;
+    user-select: none;
+}
+
+.canvas-container:active {
+    cursor: grabbing;
 }
 
 #map-canvas {
-    max-width: 100%;
-    max-height: 100%;
+    max-width: none;
+    max-height: none;
     border: 2px solid var(--border);
     box-shadow:
         0 0 20px rgba(0, 0, 0, 0.5),
         0 0 60px rgba(0, 0, 0, 0.2);
     image-rendering: auto;
+    /* Transform and transform-origin are set inline by MapCanvas */
+    will-change: transform;
+    transition: transform 0s;
 }
 
 /* ── Status Bar ────────────────────────────────────────────────────── */
