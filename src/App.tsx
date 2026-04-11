@@ -145,7 +145,28 @@ export default function App() {
   // When the zoom level changes to 'city', auto-switch to the city
   // generator using the clicked city's data. Going back to 'world'
   // switches back to the world generator.
+  //
+  // This effect is a zoom-level -> generator sync: it must only run
+  // on the first mount (to align the initial generator with the
+  // default zoom) and on real zoom.level transitions, NOT when the
+  // user manually picks a different generator from the sidebar.
+  // Listing `activeGenerator` in deps would cause a manual "pick
+  // battlemap" or "pick citymap" to be instantly reverted to worldmap
+  // because the effect would re-fire seeing zoom.level==='world' and
+  // activeGenerator.id !== 'worldmap'. We instead key off a prev-level
+  // ref so only actual transitions trigger the sync.
+  const prevZoomLevelRef = useRef(zoom.level);
+  const zoomSyncMountedRef = useRef(false);
   useEffect(() => {
+    const prevLevel = prevZoomLevelRef.current;
+    prevZoomLevelRef.current = zoom.level;
+    const isFirstRun = !zoomSyncMountedRef.current;
+    zoomSyncMountedRef.current = true;
+    // Bail unless this is the first run or the zoom level actually
+    // transitioned. `generators` changing from [] to the populated
+    // list on mount still needs to let the first run through.
+    if (!isFirstRun && prevLevel === zoom.level) return;
+
     if (zoom.level === 'city' && zoom.data) {
       const cityGen = generators.find(g => g.id === 'citymap');
       if (cityGen && activeGenerator?.id !== 'citymap') {
@@ -161,7 +182,12 @@ export default function App() {
     } else if (zoom.level === 'world' && activeGenerator?.id !== 'worldmap') {
       switchGenerator('worldmap');
     }
-  }, [zoom.level, zoom.data, generators, activeGenerator, switchGenerator, updateConfig]);
+    // Intentionally omit `activeGenerator` from deps: we only want
+    // this sync to fire on zoom transitions, not on manual generator
+    // switches from the sidebar. `activeGenerator` is still read
+    // inside for the idempotent guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom.level, zoom.data, generators, switchGenerator, updateConfig]);
 
   // Format last import result as a user-facing message
   const lastAssetImportMessage = useMemo(() => {
