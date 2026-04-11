@@ -39,8 +39,9 @@ jobs:
 
       - name: Build
         env:
-          # Vite's base path for GitHub Pages: https://<user>.github.io/mapmaker/
-          VITE_BASE: /mapmaker/
+          # Vite's base path for GitHub Pages: https://<user>.github.io/Mapmaker/
+          # Must match the exact repo name casing ("Mapmaker" with capital M)
+          VITE_BASE: /Mapmaker/
         run: npm run build
 
       - name: Upload Pages artifact
