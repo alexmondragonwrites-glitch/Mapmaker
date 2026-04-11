@@ -418,9 +418,28 @@ export class BattleMapGenerator {
     }
 
     // ── Interactive Token Placement ─────────────────────────────────
+    //
+    // setupInteraction attaches click + mousemove listeners to the
+    // canvas so the user can drop tokens. It's called by the App
+    // each time the active generator switches to battlemap. Without
+    // a cleanup step, repeated switches between generators would
+    // accumulate stale listeners on the canvas element and cause
+    // duplicate token placements / memory leaks.
+    //
+    // Each call:
+    //   1. Runs the previous cleanup (if any)
+    //   2. Creates fresh handlers captured to `this`
+    //   3. Stores a new cleanup closure on `this._interactionCleanup`
+    //   4. Returns the cleanup so the caller can also dispose early
 
     setupInteraction(canvas, regenerateCallback) {
-        canvas.addEventListener('click', (e) => {
+        // Dispose previous listeners if this method is called again
+        if (typeof this._interactionCleanup === 'function') {
+            this._interactionCleanup();
+            this._interactionCleanup = null;
+        }
+
+        const handleClick = (e) => {
             if (!this.selectedEnemyType) return;
 
             const rect = canvas.getBoundingClientRect();
@@ -438,10 +457,8 @@ export class BattleMapGenerator {
             // Check if token already exists at this position
             const existingIdx = this.placedTokens.findIndex(t => t.col === col && t.row === row);
             if (existingIdx >= 0) {
-                // Remove existing token
                 this.placedTokens.splice(existingIdx, 1);
             } else {
-                // Add new token
                 this.placedTokens.push({
                     typeId: this.selectedEnemyType,
                     col,
@@ -450,9 +467,9 @@ export class BattleMapGenerator {
             }
 
             regenerateCallback();
-        });
+        };
 
-        canvas.addEventListener('mousemove', (e) => {
+        const handleMove = (e) => {
             if (!this.selectedEnemyType) {
                 canvas.style.cursor = 'default';
                 return;
@@ -473,14 +490,33 @@ export class BattleMapGenerator {
                 this.hoveredCell = { col, row };
                 regenerateCallback();
 
-                // Draw hover highlight
                 const ctx = canvas.getContext('2d');
                 if (col >= 0 && col < cfg.gridCols && row >= 0 && row < cfg.gridRows) {
                     ctx.fillStyle = PALETTES.battle.gridHover;
                     ctx.fillRect(col * cfg.gridSize, row * cfg.gridSize, cfg.gridSize, cfg.gridSize);
                 }
             }
-        });
+        };
+
+        canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('mousemove', handleMove);
+
+        this._interactionCleanup = () => {
+            canvas.removeEventListener('click', handleClick);
+            canvas.removeEventListener('mousemove', handleMove);
+            canvas.style.cursor = 'default';
+        };
+
+        return this._interactionCleanup;
+    }
+
+    /** Remove any attached interaction listeners. Called by the host when
+     *  the battle map is unmounted or a different generator takes over. */
+    teardownInteraction() {
+        if (typeof this._interactionCleanup === 'function') {
+            this._interactionCleanup();
+            this._interactionCleanup = null;
+        }
     }
 
     clearTokens() {

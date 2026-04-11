@@ -111,6 +111,24 @@ export default function App() {
     }
   }, [config]);
 
+  // Battle-map token placement needs interaction handlers attached to
+  // the canvas. setupInteraction returns a cleanup that must run when
+  // the user switches to a different generator so the listeners don't
+  // leak and fire on the wrong map.
+  useEffect(() => {
+    if (!canvasRef.current || !activeGenerator) return;
+    const inst = activeGenerator.instance as any;
+    if (activeGenerator.id === 'battlemap' && typeof inst.setupInteraction === 'function') {
+      const cleanup = inst.setupInteraction(canvasRef.current, () => {
+        if (canvasRef.current) generate(canvasRef.current);
+      });
+      return () => {
+        if (typeof cleanup === 'function') cleanup();
+      };
+    }
+    return undefined;
+  }, [activeGenerator, generate]);
+
   // Re-render once the asset cache finishes loading (so the first
   // render after page load can pick up PNG assets from IndexedDB)
   const prevAssetsLoading = useRef<boolean | null>(null);

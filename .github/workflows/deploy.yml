@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run tests (classifier self-test)
+        run: npm test
+
       - name: Build
         env:
           # Vite's base path for GitHub Pages: https://<user>.github.io/Mapmaker/

@@ -36,14 +36,28 @@ export function useAssets() {
     const [error, setError] = useState<string | null>(null);
     const [lastImport, setLastImport] = useState<ImportResult | null>(null);
 
+    // Tracks whether the hook is still mounted so async work spawned
+    // in useEffect or async actions doesn't setState after unmount.
+    // React StrictMode double-invokes effects which means the first
+    // instance gets cancelled mid-flight - this flag prevents the
+    // resulting "setState on unmounted component" warning and the
+    // subtle state desync that could follow.
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
     /** Reload packs from IndexedDB and rebuild cache. */
     const refresh = useCallback(async () => {
         const store = storeRef.current;
         try {
             await store.open();
             const list = await store.listPacks();
+            if (!mountedRef.current) return;
             setPacks(list);
             await store.buildCache();
+            if (!mountedRef.current) return;
             setSummary({
                 totalPacks: list.length,
                 enabledPacks: list.filter(p => p.enabled).length,
@@ -53,15 +67,15 @@ export function useAssets() {
             });
             setError(null);
         } catch (err: any) {
+            if (!mountedRef.current) return;
             setError(err.message || String(err));
         } finally {
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     }, []);
 
     // Initial load: auto-import any local dev assets, then refresh
     useEffect(() => {
-        let cancelled = false;
         (async () => {
             try {
                 await storeRef.current.open();
@@ -73,9 +87,8 @@ export function useAssets() {
             } catch (err) {
                 console.warn('[useAssets] dev auto-load failed:', err);
             }
-            if (!cancelled) await refresh();
+            if (mountedRef.current) await refresh();
         })();
-        return () => { cancelled = true; };
     }, [refresh]);
 
     const importFiles = useCallback(async (files: File[]) => {

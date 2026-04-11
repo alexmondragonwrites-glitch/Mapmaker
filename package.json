@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --experimental-default-type=module scripts/run-selftest.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
