@@ -23,6 +23,53 @@ export interface ImportResult {
 }
 
 /**
+ * Decide whether a file path should be skipped during import.
+ *
+ * Wonderdraft asset packs come with multiple non-asset files:
+ *  - `.wonderdraft_symbols` / `.wonderdraft_icon` config blobs
+ *  - `_normal.png` (icon), `_custom.png`, `_sample.png` (UI thumbs,
+ *    not the actual map asset!). The tiny coloured "marker" icons
+ *    the user was seeing on their map came from the _sample variants.
+ *  - `preview.png`, `thumbnail.png`, `icon.png`
+ *  - `textures/ground/` or `textures/water/` - these are large tileable
+ *    background textures, not stamp-style map assets, and putting them
+ *    on the map looks horrible
+ *  - fonts/ - literal fonts
+ *
+ * Returns null if the path is OK to import, otherwise a reason string
+ * so callers can log or display it.
+ */
+export function shouldSkipPath(path: string): string | null {
+    const lower = path.toLowerCase();
+
+    // OS / hidden files
+    if (lower.includes('__macosx')) return 'macos metadata';
+    if (lower.split('/').some(p => p.startsWith('.'))) return 'hidden';
+
+    // Non-image files
+    if (!/\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'not an image';
+
+    // Wonderdraft internal variants - skip thumbnails and previews
+    if (/_sample\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'sample thumbnail';
+    if (/_custom\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'custom placeholder';
+    if (/(?:^|\/)preview\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'preview';
+    if (/(?:^|\/)thumbnail\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'thumbnail';
+    if (/(?:^|\/)icon\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'icon';
+    if (/(?:^|\/)logo\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'logo';
+
+    // Background textures (tileable ground/water) - not stamp assets
+    if (lower.includes('/textures/ground/')) return 'background texture';
+    if (lower.includes('/textures/water/')) return 'background texture';
+    if (lower.includes('/textures/paper/')) return 'background texture';
+    if (lower.includes('/overlays/')) return 'background overlay';
+
+    // Font folders (some packs include fonts even though they are TTF)
+    if (lower.includes('/fonts/')) return 'font';
+
+    return null;
+}
+
+/**
  * Import a ZIP file. Picks the pack name from the filename.
  */
 export async function importZip(
@@ -49,10 +96,9 @@ export async function importZip(
     for (const [path, bytes] of Object.entries(unpacked)) {
         // Skip directories (fflate marks them with empty content + trailing slash)
         if (path.endsWith('/') || bytes.length === 0) continue;
-        // Skip hidden / OS metadata files
-        if (path.includes('__MACOSX') || path.split('/').some(p => p.startsWith('.'))) continue;
-        // Only image files
-        if (!/\.(png|jpg|jpeg|webp)$/i.test(path)) continue;
+
+        // Apply the skip rules (Wonderdraft variants, previews, textures, ...)
+        if (shouldSkipPath(path)) continue;
 
         const category = classifyFilename(path);
         if (!category) {
@@ -101,10 +147,11 @@ export async function importFiles(
     const skippedFilenames: string[] = [];
 
     for (const file of files) {
-        if (!/\.(png|jpg|jpeg|webp)$/i.test(file.name)) continue;
-
-        // Prefer webkitRelativePath so classifier sees the folder
+        // Prefer webkitRelativePath so the classifier and skip rules see
+        // the full folder context
         const path = (file as any).webkitRelativePath || file.name;
+        if (shouldSkipPath(path)) continue;
+
         const category = classifyFilename(path);
         if (!category) {
             skippedFilenames.push(path);
