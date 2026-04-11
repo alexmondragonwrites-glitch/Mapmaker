@@ -212,6 +212,7 @@ export class CityMapGenerator {
             height: 900,
             citySize: 'medium',       // small | medium | large | metropolis
             style: 'human',           // human | elven | dwarven | mixed
+            mapStyle: 'natural',      // natural | wonderdraft (matches worldmap)
             hasWalls: true,
             hasRiver: true,
             hasCastle: true,
@@ -244,6 +245,10 @@ export class CityMapGenerator {
                 { value: 'elven', label: 'Elfen' },
                 { value: 'dwarven', label: 'Zwerge' },
                 { value: 'mixed', label: 'Gemischt' },
+            ]},
+            { type: 'select', key: 'mapStyle', label: 'Kartenstil', options: [
+                { value: 'natural', label: 'Natürlich' },
+                { value: 'wonderdraft', label: 'Wonderdraft (für Assets)' },
             ]},
             { type: 'checkbox', key: 'hasWalls', label: 'Stadtmauer' },
             { type: 'checkbox', key: 'hasRiver', label: 'Fluss' },
@@ -384,7 +389,12 @@ export class CityMapGenerator {
      * Per-biome background palette and noise settings. Each entry returns an
      * RGB triplet given a noise value [0..1] and the (x,y) coordinates.
      */
-    _biomeColor(biome, n, moisture) {
+    _biomeColor(biome, n, moisture, mapStyle = 'natural') {
+        // Wonderdraft palette: warm, muted, matches the hand-drawn asset
+        // look from commercial fantasy packs. No saturated greens.
+        if (mapStyle === 'wonderdraft') {
+            return this._biomeColorWonderdraft(biome, n, moisture);
+        }
         switch (biome) {
             case 'plains':
                 // Lush green meadowland
@@ -433,6 +443,56 @@ export class CityMapGenerator {
         }
     }
 
+    /**
+     * Wonderdraft-matching palette for the city background. All biomes
+     * render as warm cream / sage tones so the hand-drawn asset stamps
+     * contrast cleanly against them. The biome still affects hue
+     * slightly (a marsh reads cooler than a steppe) but never gets
+     * saturated enough to fight the assets.
+     */
+    _biomeColorWonderdraft(biome, n, moisture) {
+        switch (biome) {
+            case 'plains':
+                return {
+                    r: 190 + n * 24,
+                    g: 192 + n * 22,
+                    b: 130 + n * 18,
+                };
+            case 'forest_edge':
+                return {
+                    r: 172 + n * 22 + moisture * 8,
+                    g: 178 + n * 22,
+                    b: 118 + n * 16,
+                };
+            case 'hills':
+                return {
+                    r: 202 + n * 28,
+                    g: 194 + n * 24,
+                    b: 128 + n * 18,
+                };
+            case 'coastal':
+                return {
+                    r: 212 + n * 22,
+                    g: 200 + n * 18,
+                    b: 148 + n * 14,
+                };
+            case 'marsh':
+                return {
+                    r: 168 + n * 20 - moisture * 10,
+                    g: 172 + n * 18 - moisture * 6,
+                    b: 122 + n * 14 + moisture * 14,
+                };
+            case 'steppe':
+                return {
+                    r: 216 + n * 24,
+                    g: 204 + n * 20,
+                    b: 142 + n * 16,
+                };
+            default:
+                return { r: 196, g: 190, b: 134 };
+        }
+    }
+
     _renderBackground(ctx, cfg, noise) {
         const { width, height } = cfg;
         const biome = this._getTerrainBiome(cfg.seed);
@@ -452,7 +512,7 @@ export class CityMapGenerator {
                 // doesn't line up with the main noise
                 const m = (noise2.fbm(x / 110, y / 110, 3) + 1) * 0.5;
 
-                const color = this._biomeColor(biome, n, m);
+                const color = this._biomeColor(biome, n, m, cfg.mapStyle);
 
                 const pi = (y * width + x) * 4;
                 data[pi]     = Math.max(0, Math.min(255, color.r));
