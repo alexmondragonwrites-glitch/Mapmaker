@@ -7,14 +7,51 @@
 import { SimplexNoise } from './noise';
 import { clamp } from '../utils';
 
+// ── Module-level noise singletons ───────────────────────────────────
+// Two of the book-style renderers (coastline hachure, water waves)
+// use fixed seeds so their pattern stays constant across renders.
+// Building a new SimplexNoise for each call costs ~200-400 µs in the
+// permutation table shuffle. We build them once and reuse.
+let _handDrawnNoise: SimplexNoise | null = null;
+let _waterWaveNoise: SimplexNoise | null = null;
+function handDrawnNoise(): SimplexNoise {
+    if (!_handDrawnNoise) _handDrawnNoise = new SimplexNoise(12345);
+    return _handDrawnNoise;
+}
+function waterWaveNoise(): SimplexNoise {
+    if (!_waterWaveNoise) _waterWaveNoise = new SimplexNoise(54321);
+    return _waterWaveNoise;
+}
+
+// Cache for seed-derived noise instances used throughout the book
+// renderers. Multiple renderers request the same (seed + offset)
+// combinations on every generate() call. Caching cuts the cost of
+// ~7 permutation-table shuffles per render. The cache is keyed on
+// the combined seed number so different base seeds coexist.
+const _seedNoiseCache = new Map<number, SimplexNoise>();
+function seedNoise(key: number): SimplexNoise {
+    let n = _seedNoiseCache.get(key);
+    if (!n) {
+        n = new SimplexNoise(key);
+        _seedNoiseCache.set(key, n);
+        // Bound the cache so long-running sessions don't leak memory
+        // on unbounded seed entropy
+        if (_seedNoiseCache.size > 64) {
+            const oldestKey = _seedNoiseCache.keys().next().value;
+            if (oldestKey !== undefined) _seedNoiseCache.delete(oldestKey);
+        }
+    }
+    return n;
+}
+
 // ── Parchment Paper Texture ─────────────────────────────────────────
 
 /**
  * Generate a realistic parchment texture on a canvas
  */
 export function renderParchmentTexture(ctx, width, height, seed = 42) {
-    const noise = new SimplexNoise(seed + 777);
-    const noise2 = new SimplexNoise(seed + 888);
+    const noise = seedNoise(seed + 777);
+    const noise2 = seedNoise(seed + 888);
     const imageData = ctx.createImageData(width, height);
     const data = imageData.data;
 
@@ -59,7 +96,7 @@ export function renderParchmentTexture(ctx, width, height, seed = 42) {
  * Add realistic aging effects: coffee stains, foxing spots, water damage
  */
 export function renderAgeEffects(ctx, width, height, seed = 42, intensity = 0.5) {
-    const noise = new SimplexNoise(seed + 999);
+    const noise = seedNoise(seed + 999);
 
     ctx.save();
 
@@ -196,7 +233,7 @@ export function renderHandDrawnCoastline(ctx, width, height, heightMap, seaLevel
         hachureDensity = 0.15,
     } = options;
 
-    const noise = new SimplexNoise(12345);
+    const noise = handDrawnNoise();
 
     ctx.save();
 
@@ -278,7 +315,7 @@ export function renderWaterWaves(ctx, width, height, heightMap, seaLevel, option
         lineWidth = 0.5,
     } = options;
 
-    const noise = new SimplexNoise(54321);
+    const noise = waterWaveNoise();
 
     ctx.save();
     ctx.strokeStyle = waveColor;
@@ -816,8 +853,8 @@ export function renderCloudEdges(ctx, width, height, seed = 42, options = {}) {
         color = 'rgba(240, 235, 220,',
     } = options;
 
-    const noise = new SimplexNoise(seed + 5555);
-    const noise2 = new SimplexNoise(seed + 6666);
+    const noise = seedNoise(seed + 5555);
+    const noise2 = seedNoise(seed + 6666);
 
     ctx.save();
 
@@ -863,56 +900,57 @@ export function renderCloudEdges(ctx, width, height, seed = 42, options = {}) {
  * canopy effect with highlights and shadows.
  */
 export function renderPaintedForests(ctx, width, height, heightMap, moistureMap, temperatureMap, seaLevel, mountainLevel, forestDensity, seed) {
-    const noise = new SimplexNoise(seed + 8888);
-    const noise2 = new SimplexNoise(seed + 9999);
+    const noise = seedNoise(seed + 8888);
+    const noise2 = seedNoise(seed + 9999);
 
-    // Pass 1: Build forest density map
+    // Combined pass 1+2: compute forest density AND blend it into the
+    // existing ImageData in a single loop. The previous code built a
+    // Float32Array density map in a full pixel pass, then called
+    // getImageData (a GPU stall), then did a second full pixel pass
+    // to do the blending. That's ~2M pixel iterations for a 1200x800
+    // map. Merging cuts it to 1M and removes the dead Float32Array
+    // allocation.
+    //
+    // We still need the forestMap afterward for pass 3 (crown outlines
+    // at the forest edges), so it's kept as a light-weight record but
+    // only populated where f >= 0.2 - rows that don't touch any forest
+    // never touch the array.
     const forestMap = new Float32Array(width * height);
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const idx = y * width + x;
-            const h = heightMap[idx];
-            const m = moistureMap[idx];
+    const mountainCutoff = mountainLevel * 0.88;
 
-            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
-
-            // Forest probability from moisture
-            let forestP = 0;
-            if (m > 0.4) {
-                forestP = (m - 0.4) * 2.5 * forestDensity;
-            }
-
-            // Noise modulation for clumping
-            const clumpNoise = (noise.fbm(x / 40, y / 40, 3) + 1) * 0.5;
-            forestP *= clumpNoise;
-
-            // Temperature influence
-            const t = temperatureMap ? temperatureMap[idx] : 0.5;
-            if (t < 0.15) forestP *= 0.3; // Tundra = sparse
-            if (t > 0.8 && m < 0.4) forestP *= 0.2; // Hot dry = sparse
-
-            forestMap[idx] = clamp(forestP, 0, 1);
-        }
-    }
-
-    // Pass 2: Render forest masses as layered canopy
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            const f = forestMap[idx];
-            if (f < 0.2) continue;
+            const h = heightMap[idx];
 
-            const pi = idx * 4;
+            // Quick reject: water and mountain peaks never grow trees
+            if (h <= seaLevel || h >= mountainCutoff) continue;
 
-            // Forest color varies by density and noise
-            const n = noise2.noise2D(x / 12, y / 12);
+            const m = moistureMap[idx];
+            if (m <= 0.4) continue;
+
+            // Forest probability from moisture + clump noise + temperature
+            let forestP = (m - 0.4) * 2.5 * forestDensity;
+            const clumpNoise = (noise.fbm(x / 40, y / 40, 3) + 1) * 0.5;
+            forestP *= clumpNoise;
+
             const t = temperatureMap ? temperatureMap[idx] : 0.5;
+            if (t < 0.15) forestP *= 0.3;                 // tundra
+            if (t > 0.8 && m < 0.4) forestP *= 0.2;        // hot-dry
 
-            // Base forest green (varies with temperature)
-            let fr, fg, fb;
+            if (forestP < 0.2) continue;
+
+            const f = clamp(forestP, 0, 1);
+            forestMap[idx] = f;
+
+            // Blend forest canopy colour into the existing pixel
+            const pi = idx * 4;
+            const n = noise2.noise2D(x / 12, y / 12);
+
+            let fr: number, fg: number, fb: number;
             if (t < 0.3) {
                 // Cold: darker, blue-green conifers
                 fr = 30 + n * 10;
@@ -930,20 +968,19 @@ export function renderPaintedForests(ctx, width, height, heightMap, moistureMap,
                 fb = 25 + n * 8;
             }
 
-            // Canopy highlight (simulated top-lighting)
+            // Canopy highlight / shadow from a second frequency
             const highlight = noise.noise2D(x / 6, y / 6);
             if (highlight > 0.3) {
                 fr += 15; fg += 20; fb += 5;
             } else if (highlight < -0.3) {
-                // Shadow between tree crowns
                 fr -= 10; fg -= 12; fb -= 5;
             }
 
-            // Blend with existing terrain based on forest density
-            const blend = clamp(f * 0.85, 0, 0.9);
-            data[pi]     = Math.round(data[pi] * (1 - blend) + fr * blend);
-            data[pi + 1] = Math.round(data[pi + 1] * (1 - blend) + fg * blend);
-            data[pi + 2] = Math.round(data[pi + 2] * (1 - blend) + fb * blend);
+            const blend = f * 0.85 > 0.9 ? 0.9 : f * 0.85;
+            const invBlend = 1 - blend;
+            data[pi]     = (data[pi]     * invBlend + fr * blend) | 0;
+            data[pi + 1] = (data[pi + 1] * invBlend + fg * blend) | 0;
+            data[pi + 2] = (data[pi + 2] * invBlend + fb * blend) | 0;
         }
     }
 

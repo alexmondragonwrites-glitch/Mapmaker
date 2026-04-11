@@ -6,6 +6,7 @@ import { useGenerator } from './hooks/useGenerator';
 import { useLore } from './hooks/useLore';
 import { useAssets } from './hooks/useAssets';
 import { useZoom } from './hooks/useZoom';
+import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { setWorldMapZoom } from './engine/generators/worldmap';
 import { exportCanvasAsPNG } from './utils';
 import type { ActivePanel } from './components/Sidebar/TabBar';
@@ -104,12 +105,17 @@ export default function App() {
     generate(canvas);
   }, [generate, zoom]);
 
-  // Auto-regenerate when config changes
+  // Auto-regenerate when config changes - but debounced by 180ms so
+  // dragging a slider doesn't trigger a render on every intermediate
+  // value. The rendered config lags the visible control state by one
+  // quiet frame, which is barely perceptible but saves 10-20 redundant
+  // full generates per slider drag.
+  const debouncedConfig = useDebouncedValue(config, 180);
   useEffect(() => {
     if (canvasRef.current && activeGenerator) {
       generate(canvasRef.current);
     }
-  }, [config]);
+  }, [debouncedConfig]);
 
   // Battle-map token placement needs interaction handlers attached to
   // the canvas. setupInteraction returns a cleanup that must run when

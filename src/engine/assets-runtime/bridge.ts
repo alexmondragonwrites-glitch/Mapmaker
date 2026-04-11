@@ -126,6 +126,29 @@ const CATEGORY_ANCHOR_Y: Partial<Record<AssetCategory, number>> = {
     decoration: 0.70,
 };
 
+// Cached reference to the AssetStore singleton so tryDrawAsset()
+// doesn't have to call getAssetStore() on every tree and mountain
+// in a hot render loop. Cleared by invalidateBridgeCache() when
+// packs change so new assets become visible without a reload.
+let _cachedStore: ReturnType<typeof getAssetStore> | null = null;
+
+// Fast per-category "has assets" cache. AssetStore already has one
+// internally, but going through the function adds a method dispatch
+// per call. Mirroring it here keeps the hot path to a single
+// Map.get() without the surrounding overhead.
+const _categoryAvailable = new Map<AssetCategory, boolean>();
+
+/** Call when packs are (un)loaded so the bridge re-queries the store. */
+export function invalidateBridgeCache(): void {
+    _cachedStore = null;
+    _categoryAvailable.clear();
+}
+
+function getStoreCached() {
+    if (!_cachedStore) _cachedStore = getAssetStore();
+    return _cachedStore;
+}
+
 /**
  * Draw an asset by category. If the AssetStore has at least one
  * variant, pick one deterministically via the seed and draw it
@@ -140,10 +163,18 @@ export function tryDrawAsset(
     size: number,
     seed: number,
 ): boolean {
-    const store = getAssetStore();
-    if (!store.hasCategory(category)) return false;
+    // Fast path: if we've already asked this store about this category
+    // and the answer was "no assets", short-circuit without even
+    // touching the store. This is the common case for categories that
+    // a user's pack doesn't cover.
+    let avail = _categoryAvailable.get(category);
+    if (avail === undefined) {
+        avail = getStoreCached().hasCategory(category);
+        _categoryAvailable.set(category, avail);
+    }
+    if (!avail) return false;
 
-    const loaded = store.pickAsset(category, seed);
+    const loaded = getStoreCached().pickAsset(category, seed);
     if (!loaded) return false;
 
     drawLoadedAsset(ctx, loaded, x, y, size, category);

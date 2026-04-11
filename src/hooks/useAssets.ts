@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { getAssetStore, type PackRecord } from '../engine/assets-runtime';
 import { importDrop, type ImportResult } from '../engine/assets-runtime/importer';
 import { autoLoadDevAssets } from '../engine/assets-runtime/devAutoLoader';
+import { invalidateBridgeCache } from '../engine/assets-runtime/bridge';
 
 export interface AssetDiagSample {
     filename: string;
@@ -57,6 +58,10 @@ export function useAssets() {
             if (!mountedRef.current) return;
             setPacks(list);
             await store.buildCache();
+            // Packs or enablement may have changed - drop the bridge's
+            // per-category availability cache so hot-path tryDrawAsset
+            // picks up new assets on the next render.
+            invalidateBridgeCache();
             if (!mountedRef.current) return;
             setSummary({
                 totalPacks: list.length,
