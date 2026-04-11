@@ -6,15 +6,13 @@
 import { SimplexNoise } from '../noise';
 import { NameGenerator, PALETTES, SeededRandom, clamp, distance } from '../../utils';
 import {
-    drawHumanHouse, drawElvenHouse, drawDwarvenHouse,
+    drawHumanHouse,
     drawTower, drawTemple, drawTavern, drawCastle, drawTree, drawMapBorder,
-    drawForge, drawChurch, drawGuildHall, drawWarehouse,
-    drawWell, drawFountain, drawMarketStall, drawWindmill,
-    drawStatue, drawBarracks, drawLibrary, drawDock,
-    drawShack, drawNobleHouse, drawShrine,
+    drawForge, drawWarehouse,
+    drawWell, drawFountain, drawWindmill,
+    drawStatue, drawBarracks, drawLibrary,
+    drawShrine,
 } from '../assets';
-import { tryDrawAsset } from '../assets-runtime/bridge';
-import type { AssetCategory } from '../assets-runtime';
 // Package C1: layout primitives (outline, gates, districts, walls, roads, bridges)
 // live in their own module. citymap.ts orchestrates; layout.ts owns geometry.
 import {
@@ -28,186 +26,13 @@ import {
     renderRoads,
     renderBridges,
 } from './citymap/layout';
-
-// Map procedural draw functions to their asset category, so the bridge
-// can look up PNG variants if the user has installed an asset pack.
-const DRAW_FN_CATEGORY = new Map<Function, AssetCategory>([
-    [drawHumanHouse,   'house_human'],
-    [drawElvenHouse,   'house_elven'],
-    [drawDwarvenHouse, 'house_dwarven'],
-    [drawNobleHouse,   'house'],
-    [drawShack,        'house'],
-    [drawTower,        'tower'],
-    [drawTemple,       'temple'],
-    [drawChurch,       'church'],
-    [drawShrine,       'shrine'],
-    [drawTavern,       'tavern'],
-    [drawCastle,       'castle'],
-    [drawTree,         'tree'],
-    [drawForge,        'forge'],
-    [drawGuildHall,    'house'],
-    [drawWarehouse,    'house'],
-    [drawWell,         'decoration'],
-    [drawFountain,     'decoration'],
-    [drawMarketStall,  'decoration'],
-    [drawWindmill,     'windmill'],
-    [drawStatue,       'decoration'],
-    [drawBarracks,     'house'],
-    [drawLibrary,      'house'],
-    [drawDock,         'decoration'],
-]);
-
-/**
- * Draw a building using the PNG asset if one is loaded for the
- * category, otherwise fall back to the procedural function.
- */
-function drawBuildingSmart(
-    ctx: any,
-    drawFn: Function,
-    x: number,
-    y: number,
-    size: number,
-    seed: number,
-): void {
-    const category = DRAW_FN_CATEGORY.get(drawFn);
-    if (category && tryDrawAsset(ctx, category, x, y, size, seed)) return;
-    (drawFn as any)(ctx, x, y, size);
-}
-
-// ── District Building Mix Definitions ───────────────────────────────
-// Each district type has a weighted list of buildings it spawns.
-// weight = how often this building appears relative to others in the same district.
-
-type BuildingDrawFn = (ctx: any, x: number, y: number, size: number, options?: any) => void;
-
-interface BuildingEntry {
-    draw: BuildingDrawFn;
-    weight: number;
-    sizeMin: number;
-    sizeMax: number;
-}
-
-interface DistrictProfile {
-    buildings: BuildingEntry[];
-    density: number;      // building count multiplier (1.0 = normal)
-    spacing: number;      // min distance between buildings in px
-    groundTint: string;   // overlay color for the district ground
-    groundAlpha: number;  // opacity of the ground tint
-}
-
-const DISTRICT_PROFILES: Record<string, DistrictProfile> = {
-    markt: {
-        buildings: [
-            { draw: drawMarketStall, weight: 10, sizeMin: 10, sizeMax: 14 },
-            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 14 },
-            { draw: drawTavern,      weight: 2,  sizeMin: 14, sizeMax: 18 },
-            { draw: drawWell,        weight: 1,  sizeMin: 10, sizeMax: 12 },
-        ],
-        density: 1.2, spacing: 11,
-        groundTint: '#c4a868', groundAlpha: 0.25,
-    },
-    wohn: {
-        buildings: [
-            { draw: drawHumanHouse,  weight: 10, sizeMin: 10, sizeMax: 14 },
-            { draw: drawWell,        weight: 1,  sizeMin: 9,  sizeMax: 11 },
-            { draw: drawTavern,      weight: 1,  sizeMin: 14, sizeMax: 16 },
-        ],
-        density: 1.0, spacing: 12,
-        groundTint: '#8a7a5a', groundAlpha: 0.15,
-    },
-    handwerk: {
-        buildings: [
-            { draw: drawForge,       weight: 4,  sizeMin: 14, sizeMax: 18 },
-            { draw: drawHumanHouse,  weight: 6,  sizeMin: 10, sizeMax: 13 },
-            { draw: drawWarehouse,   weight: 3,  sizeMin: 16, sizeMax: 22 },
-            { draw: drawGuildHall,   weight: 1,  sizeMin: 18, sizeMax: 24 },
-        ],
-        density: 1.0, spacing: 14,
-        groundTint: '#6a5a4a', groundAlpha: 0.2,
-    },
-    adel: {
-        buildings: [
-            { draw: drawNobleHouse,  weight: 8,  sizeMin: 16, sizeMax: 22 },
-            { draw: drawLibrary,     weight: 1,  sizeMin: 20, sizeMax: 26 },
-            { draw: drawStatue,      weight: 2,  sizeMin: 12, sizeMax: 16 },
-            { draw: drawFountain,    weight: 1,  sizeMin: 14, sizeMax: 18 },
-        ],
-        density: 0.6, spacing: 22,
-        groundTint: '#b0a080', groundAlpha: 0.25,
-    },
-    hafen: {
-        buildings: [
-            { draw: drawWarehouse,   weight: 8,  sizeMin: 18, sizeMax: 24 },
-            { draw: drawTavern,      weight: 3,  sizeMin: 14, sizeMax: 18 },
-            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 13 },
-            { draw: drawDock,        weight: 3,  sizeMin: 18, sizeMax: 22 },
-        ],
-        density: 0.9, spacing: 16,
-        groundTint: '#6a6a5a', groundAlpha: 0.2,
-    },
-    tempel: {
-        buildings: [
-            { draw: drawChurch,      weight: 3,  sizeMin: 18, sizeMax: 24 },
-            { draw: drawShrine,      weight: 6,  sizeMin: 10, sizeMax: 14 },
-            { draw: drawTemple,      weight: 2,  sizeMin: 22, sizeMax: 28 },
-            { draw: drawStatue,      weight: 2,  sizeMin: 10, sizeMax: 14 },
-            { draw: drawHumanHouse,  weight: 2,  sizeMin: 10, sizeMax: 12 },
-        ],
-        density: 0.7, spacing: 18,
-        groundTint: '#aaa090', groundAlpha: 0.25,
-    },
-    garten: {
-        buildings: [
-            { draw: drawTree,        weight: 15, sizeMin: 8,  sizeMax: 14 },
-            { draw: drawFountain,    weight: 2,  sizeMin: 14, sizeMax: 18 },
-            { draw: drawStatue,      weight: 2,  sizeMin: 10, sizeMax: 14 },
-            { draw: drawShrine,      weight: 1,  sizeMin: 10, sizeMax: 12 },
-        ],
-        density: 0.9, spacing: 14,
-        groundTint: '#4a7a3a', groundAlpha: 0.3,
-    },
-    armen: {
-        buildings: [
-            { draw: drawShack,       weight: 15, sizeMin: 8,  sizeMax: 11 },
-            { draw: drawHumanHouse,  weight: 3,  sizeMin: 9,  sizeMax: 11 },
-            { draw: drawTavern,      weight: 1,  sizeMin: 12, sizeMax: 14 },
-        ],
-        density: 1.4, spacing: 9,
-        groundTint: '#4a3a2a', groundAlpha: 0.3,
-    },
-    akademie: {
-        buildings: [
-            { draw: drawLibrary,     weight: 4,  sizeMin: 20, sizeMax: 26 },
-            { draw: drawTower,       weight: 3,  sizeMin: 16, sizeMax: 22 },
-            { draw: drawStatue,      weight: 3,  sizeMin: 12, sizeMax: 16 },
-            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 13 },
-            { draw: drawShrine,      weight: 1,  sizeMin: 10, sizeMax: 12 },
-        ],
-        density: 0.7, spacing: 18,
-        groundTint: '#9a90a0', groundAlpha: 0.2,
-    },
-    kaserne: {
-        buildings: [
-            { draw: drawBarracks,    weight: 6,  sizeMin: 18, sizeMax: 24 },
-            { draw: drawTower,       weight: 4,  sizeMin: 14, sizeMax: 18 },
-            { draw: drawWarehouse,   weight: 2,  sizeMin: 16, sizeMax: 20 },
-            { draw: drawStatue,      weight: 1,  sizeMin: 12, sizeMax: 14 },
-        ],
-        density: 0.7, spacing: 18,
-        groundTint: '#5a4a3a', groundAlpha: 0.25,
-    },
-};
-
-// Pick a weighted building from a district profile
-function pickBuilding(profile: DistrictProfile, rng: any): BuildingEntry {
-    const totalWeight = profile.buildings.reduce((s, b) => s + b.weight, 0);
-    let roll = rng.next() * totalWeight;
-    for (const entry of profile.buildings) {
-        roll -= entry.weight;
-        if (roll <= 0) return entry;
-    }
-    return profile.buildings[0];
-}
+// Package C3: district profiles + building placement live in their own
+// module so this class no longer needs to know about building weights
+// or the procedural/PNG asset fallback mapping.
+import {
+    districtTint,
+    renderBuildings,
+} from './citymap/buildings';
 
 // Lore integration - set externally
 let _loreManager = null;
@@ -332,13 +157,10 @@ export class CityMapGenerator {
         // Generate districts organically inside the outline
         const districts = generateDistricts(cfg, rng, outline, riverPoints);
 
-        // District ground tinting (under walls and roads).
-        // We pass a `tintOf` callback so layout.ts doesn't need to import
-        // DISTRICT_PROFILES (which currently lives here, will move in C3).
-        renderDistrictGrounds(ctx, districts, (type) => {
-            const profile = DISTRICT_PROFILES[type];
-            return profile ? { hex: profile.groundTint, alpha: profile.groundAlpha } : null;
-        });
+        // District ground tinting (under walls and roads). The tint
+        // helper lives in citymap/buildings.ts so layout.ts stays
+        // buildings-agnostic (avoids a circular import).
+        renderDistrictGrounds(ctx, districts, districtTint);
 
         // City walls (follow the organic outline)
         if (cfg.hasWalls) {
@@ -356,7 +178,7 @@ export class CityMapGenerator {
         }
 
         // Buildings per district
-        this._renderBuildings(ctx, cfg, districts, roads, riverPoints, outline, rng, noise);
+        renderBuildings(ctx, cfg, districts, roads, riverPoints, outline, rng);
 
         // Landmarks
         this._renderLandmarks(ctx, cfg, centerX, centerY, cityRadius, rng, names, districts);
@@ -755,199 +577,6 @@ export class CityMapGenerator {
                 ctx.stroke();
             }
             ctx.restore();
-        }
-    }
-
-    /**
-     * Place buildings along the roads on both sides, so they front onto
-     * streets like real medieval towns. Each road segment spawns left and
-     * right candidates offset perpendicular to the road direction. The
-     * candidate's district is found by proximity, and the building type
-     * comes from that district's profile.
-     */
-    _renderBuildings(ctx, cfg, districts, roads, riverPoints, outline, rng, _noise) {
-        const { buildingDensity, style } = cfg;
-
-        // Global placed list so buildings from different roads don't overlap
-        const placed: Array<{ x: number; y: number; r: number }> = [];
-
-        // Helper: find the district whose radius contains (x, y), or
-        // otherwise the nearest district within avgRadius * 0.8
-        const findDistrict = (x: number, y: number) => {
-            let best: any = null;
-            let bestScore = Infinity;
-            for (const d of districts) {
-                const dd = Math.hypot(x - d.x, y - d.y);
-                // Inside the district ring is best
-                if (dd <= d.radius) {
-                    const score = dd - d.radius; // more negative is better
-                    if (score < bestScore) { bestScore = score; best = d; }
-                } else if (bestScore === Infinity) {
-                    // Fallback: nearest by distance
-                    if (dd < best?.distance || !best) {
-                        best = d;
-                        best.distance = dd;
-                    }
-                }
-            }
-            return best;
-        };
-
-        // Helper: is (x, y) too close to any road segment?
-        const isOnRoad = (x: number, y: number, margin: number) => {
-            for (const road of roads) {
-                for (const pt of road.points) {
-                    if (Math.hypot(x - pt.x, y - pt.y) < margin) return true;
-                }
-            }
-            return false;
-        };
-
-        // Helper: is (x, y) in the river?
-        const isInRiver = (x: number, y: number, margin: number) => {
-            for (const pt of riverPoints) {
-                if (Math.hypot(x - pt.x, y - pt.y) < margin) return true;
-            }
-            return false;
-        };
-
-        // Walk each road. We sample points along the polyline at a fixed
-        // stride and try to place a building on each side.
-        for (const road of roads) {
-            // Only frontage roads - skip the plaza ring which is too tight
-            if (road.type === 'plaza') continue;
-
-            // How far out from the road centerline to place buildings
-            const offset = road.width / 2 + 9;
-
-            // Stride between building candidates along the road.
-            // Main roads can afford denser frontage than branches.
-            const stride = road.type === 'main' ? 14 : 12;
-
-            // Accumulated distance since last candidate
-            let acc = 0;
-            for (let i = 1; i < road.points.length; i++) {
-                const a = road.points[i - 1];
-                const b = road.points[i];
-                const segDx = b.x - a.x;
-                const segDy = b.y - a.y;
-                const segLen = Math.hypot(segDx, segDy);
-                if (segLen < 0.01) continue;
-
-                // Perpendicular unit vector
-                const px = -segDy / segLen;
-                const py = segDx / segLen;
-
-                acc += segLen;
-                while (acc >= stride) {
-                    acc -= stride;
-                    // Position along the segment at this stride
-                    const t = (stride - acc) / segLen;
-                    const cxOnRoad = a.x + segDx * (1 - t);
-                    const cyOnRoad = a.y + segDy * (1 - t);
-
-                    // Try both sides of the road
-                    for (const side of [+1, -1]) {
-                        // Perpendicular offset + small random jitter for irregularity
-                        const jitter = rng.nextFloat(-2, 2);
-                        const bx = cxOnRoad + px * side * offset + px * side * jitter;
-                        const by = cyOnRoad + py * side * offset + py * side * jitter;
-
-                        // Must be inside the city outline
-                        if (!outline.containsPoint(bx, by, 6)) continue;
-
-                        // Not on another road
-                        if (isOnRoad(bx, by, 6)) continue;
-
-                        // Not in the river
-                        if (isInRiver(bx, by, 12)) continue;
-
-                        // Spacing against already-placed buildings
-                        let tooClose = false;
-                        for (const p of placed) {
-                            if (Math.hypot(bx - p.x, by - p.y) < p.r) { tooClose = true; break; }
-                        }
-                        if (tooClose) continue;
-
-                        // Find which district owns this spot
-                        const district = findDistrict(bx, by);
-                        if (!district) continue;
-                        const profile = DISTRICT_PROFILES[district.type];
-                        if (!profile) continue;
-
-                        // Density gate: some spots are intentionally left empty
-                        // to avoid wall-to-wall solid blocks of houses
-                        if (rng.next() > buildingDensity * profile.density * 0.95) continue;
-
-                        // Pick a building from the district profile
-                        const entry = pickBuilding(profile, rng);
-                        const size = rng.nextFloat(entry.sizeMin, entry.sizeMax);
-
-                        // Culture style override for generic houses
-                        let drawFn = entry.draw;
-                        if (entry.draw === drawHumanHouse && style !== 'human') {
-                            const effective = style === 'mixed'
-                                ? rng.pick(['human', 'elven', 'dwarven'])
-                                : style;
-                            if (effective === 'elven')  drawFn = drawElvenHouse;
-                            if (effective === 'dwarven') drawFn = drawDwarvenHouse;
-                        }
-
-                        const variantSeed = (Math.floor(bx) * 73856093) ^ (Math.floor(by) * 19349663);
-                        drawBuildingSmart(ctx, drawFn, bx, by, size, variantSeed);
-                        placed.push({ x: bx, y: by, r: profile.spacing });
-                    }
-                }
-            }
-        }
-
-        // Second pass: fill the remaining interior of each district with
-        // some background clutter (houses behind the main frontages), so
-        // we don't have big empty blocks between parallel roads.
-        for (const district of districts) {
-            const profile = DISTRICT_PROFILES[district.type];
-            if (!profile) continue;
-
-            // How much background infill: scales with density
-            const area = Math.PI * district.radius * district.radius;
-            const targetCount = Math.floor((area / (profile.spacing * profile.spacing * 3)) * buildingDensity * profile.density);
-
-            let attempts = 0;
-            let placedThis = 0;
-            while (placedThis < targetCount && attempts < targetCount * 8) {
-                attempts++;
-                const angle = rng.nextFloat(0, Math.PI * 2);
-                const dist = Math.sqrt(rng.next()) * district.radius;
-                const bx = district.x + Math.cos(angle) * dist;
-                const by = district.y + Math.sin(angle) * dist;
-
-                if (!outline.containsPoint(bx, by, 8)) continue;
-                if (isOnRoad(bx, by, 7)) continue;
-                if (isInRiver(bx, by, 14)) continue;
-
-                let tooClose = false;
-                for (const p of placed) {
-                    if (Math.hypot(bx - p.x, by - p.y) < p.r) { tooClose = true; break; }
-                }
-                if (tooClose) continue;
-
-                const entry = pickBuilding(profile, rng);
-                const size = rng.nextFloat(entry.sizeMin, entry.sizeMax);
-
-                let drawFn = entry.draw;
-                if (entry.draw === drawHumanHouse && style !== 'human') {
-                    const effective = style === 'mixed'
-                        ? rng.pick(['human', 'elven', 'dwarven'])
-                        : style;
-                    if (effective === 'elven')  drawFn = drawElvenHouse;
-                    if (effective === 'dwarven') drawFn = drawDwarvenHouse;
-                }
-
-                const variantSeed = (Math.floor(bx) * 73856093) ^ (Math.floor(by) * 19349663);
-                drawBuildingSmart(ctx, drawFn, bx, by, size, variantSeed);
-                placed.push({ x: bx, y: by, r: profile.spacing });
-                placedThis++;
-            }
         }
     }
 
