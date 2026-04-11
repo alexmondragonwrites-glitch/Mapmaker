@@ -245,8 +245,15 @@ export class CityMapGenerator {
         // The outline is used for walls, district containment, and gate placement.
         const outline = this._generateCityOutline(centerX, centerY, cityRadius, cfg.seed, noise);
 
-        // Background - grass/terrain
+        // Compute gate positions once so walls, roads and countryside agree
+        const gates = this._computeGates(outline);
+
+        // Background - grass/terrain (sets cfg._biome)
         this._renderBackground(ctx, cfg, noise);
+
+        // Countryside features (farms, fields, outbound roads from gates)
+        // - drawn on top of the background but under the river, districts and walls
+        this._renderCountryside(ctx, cfg, outline, gates, centerX, centerY, rng);
 
         // River
         let riverPoints = [];
@@ -263,7 +270,7 @@ export class CityMapGenerator {
 
         // City walls (follow the organic outline)
         if (cfg.hasWalls) {
-            this._renderWalls(ctx, cfg, outline, rng);
+            this._renderWalls(ctx, cfg, outline, gates, rng);
         }
 
         // Organic road network: gates on the outline, curved main roads,
@@ -711,7 +718,192 @@ export class CityMapGenerator {
         };
     }
 
-    _renderWalls(ctx, cfg, outline, rng) {
+    /**
+     * Compute gate positions along the outline. Gates are picked at fixed
+     * fractions of the outline so roads and countryside use the same points.
+     */
+    _computeGates(outline) {
+        const pts = outline.points;
+        const gateFractions = [0.0, 0.25, 0.5, 0.75];
+        return gateFractions.map(f => {
+            const idx = Math.floor(f * pts.length);
+            return { x: pts[idx].x, y: pts[idx].y, idx };
+        });
+    }
+
+    /**
+     * Countryside features outside the walls: outbound roads from each gate,
+     * farmland plots along those roads, scattered farmsteads, small ponds.
+     * Drawn after the background and before the river/districts so the
+     * city proper covers the countryside cleanly.
+     */
+    _renderCountryside(ctx, cfg, outline, gates, centerX, centerY, rng) {
+        const { width, height } = cfg;
+        const biome = cfg._biome || 'plains';
+        const isFarmland = biome !== 'marsh' && biome !== 'steppe';
+
+        // ── Outbound roads from gates ──
+        // Each gate gets a road that leaves the city radially outward and
+        // wanders off toward the nearest map edge with a slight curve.
+        ctx.save();
+        for (const gate of gates) {
+            // Direction: from city center through gate, then extend outward
+            const dx = gate.x - centerX;
+            const dy = gate.y - centerY;
+            const len = Math.hypot(dx, dy);
+            if (len < 1) continue;
+            const nx = dx / len;
+            const ny = dy / len;
+
+            // Start just outside the wall; end off the map edge
+            const startX = gate.x + nx * 4;
+            const startY = gate.y + ny * 4;
+            const maxDist = Math.max(width, height);
+            const endX = gate.x + nx * maxDist;
+            const endY = gate.y + ny * maxDist;
+
+            // Curve with a perpendicular offset at the midpoint
+            const midX = (startX + endX) / 2 + (-ny) * rng.nextFloat(-40, 40);
+            const midY = (startY + endY) / 2 + ( nx) * rng.nextFloat(-40, 40);
+
+            // Shadow
+            ctx.strokeStyle = 'rgba(40, 30, 20, 0.25)';
+            ctx.lineWidth = 7;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(midX, midY, endX, endY);
+            ctx.stroke();
+
+            // Road surface
+            ctx.strokeStyle = PALETTES.city.road;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(midX, midY, endX, endY);
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // ── Farmland plots ──
+        // Square-ish patches of tilled earth along the outbound roads,
+        // only in biomes where agriculture makes sense.
+        if (isFarmland) {
+            ctx.save();
+            for (const gate of gates) {
+                const dx = gate.x - centerX;
+                const dy = gate.y - centerY;
+                const len = Math.hypot(dx, dy);
+                if (len < 1) continue;
+                const nx = dx / len;
+                const ny = dy / len;
+                // Perpendicular direction
+                const px = -ny;
+                const py = nx;
+
+                // 3-5 plots per gate, at stepped distances outside the walls
+                const plotCount = rng.nextInt(3, 5);
+                for (let i = 0; i < plotCount; i++) {
+                    const forward = rng.nextFloat(30, 160);
+                    const side = rng.nextFloat(-80, 80);
+                    const px0 = gate.x + nx * forward + px * side;
+                    const py0 = gate.y + ny * forward + py * side;
+
+                    // Skip if outside the canvas or inside the city
+                    if (px0 < 10 || px0 > width - 10 || py0 < 10 || py0 > height - 10) continue;
+                    if (outline.containsPoint(px0, py0, -20)) continue;
+
+                    // Plot dimensions
+                    const w = rng.nextFloat(30, 55);
+                    const h = rng.nextFloat(22, 40);
+                    // Rotate plot roughly along the road direction
+                    const angle = Math.atan2(ny, nx) + rng.nextFloat(-0.3, 0.3);
+
+                    ctx.save();
+                    ctx.translate(px0, py0);
+                    ctx.rotate(angle);
+
+                    // Tilled earth background
+                    const earthColors = ['#7a5a3a', '#8a6a4a', '#6a4a2a', '#9a7a5a'];
+                    ctx.fillStyle = earthColors[rng.nextInt(0, earthColors.length - 1)];
+                    ctx.fillRect(-w / 2, -h / 2, w, h);
+
+                    // Furrow lines
+                    ctx.strokeStyle = 'rgba(40, 25, 10, 0.35)';
+                    ctx.lineWidth = 0.8;
+                    const furrows = Math.max(3, Math.floor(h / 6));
+                    for (let f = 1; f < furrows; f++) {
+                        const fy = -h / 2 + (h / furrows) * f;
+                        ctx.beginPath();
+                        ctx.moveTo(-w / 2 + 2, fy);
+                        ctx.lineTo(w / 2 - 2, fy);
+                        ctx.stroke();
+                    }
+
+                    // Dark plot border
+                    ctx.strokeStyle = 'rgba(30, 20, 10, 0.6)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(-w / 2, -h / 2, w, h);
+
+                    ctx.restore();
+                }
+            }
+            ctx.restore();
+        }
+
+        // ── Farmsteads / outbuildings ──
+        // Small human houses scattered in the countryside, biased toward
+        // the outbound roads. Marsh/steppe biomes get fewer.
+        const farmCount = isFarmland ? rng.nextInt(6, 12) : rng.nextInt(1, 4);
+        for (let i = 0; i < farmCount; i++) {
+            // Pick a random gate and place near its outbound corridor
+            const gate = gates[rng.nextInt(0, gates.length - 1)];
+            const dx = gate.x - centerX;
+            const dy = gate.y - centerY;
+            const len = Math.hypot(dx, dy);
+            if (len < 1) continue;
+            const nx = dx / len;
+            const ny = dy / len;
+            const px = -ny;
+            const py = nx;
+
+            const forward = rng.nextFloat(50, 220);
+            const side = rng.nextFloat(-110, 110);
+            const fx = gate.x + nx * forward + px * side;
+            const fy = gate.y + ny * forward + py * side;
+
+            if (fx < 15 || fx > width - 15 || fy < 15 || fy > height - 15) continue;
+            if (outline.containsPoint(fx, fy, -30)) continue;
+
+            drawHumanHouse(ctx, fx, fy, rng.nextFloat(9, 13));
+        }
+
+        // ── Small ponds ──
+        // A couple of round pond patches, only in wet biomes
+        if (biome === 'marsh' || biome === 'plains' || biome === 'forest_edge') {
+            const pondCount = biome === 'marsh' ? rng.nextInt(3, 6) : rng.nextInt(0, 2);
+            ctx.save();
+            for (let i = 0; i < pondCount; i++) {
+                const pondX = rng.nextFloat(40, width - 40);
+                const pondY = rng.nextFloat(40, height - 40);
+                // Keep ponds away from the city
+                if (Math.hypot(pondX - centerX, pondY - centerY) < outline.maxRadius * 1.3) continue;
+
+                const r = rng.nextFloat(12, 28);
+                // Blue water with a slight outline
+                ctx.fillStyle = '#4a7aa0';
+                ctx.beginPath();
+                ctx.ellipse(pondX, pondY, r, r * rng.nextFloat(0.7, 1.0), rng.nextFloat(0, Math.PI), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(30, 50, 70, 0.5)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    _renderWalls(ctx, cfg, outline, gates, _rng) {
         ctx.save();
 
         const wallPoints = outline.points;
@@ -738,13 +930,8 @@ export class CityMapGenerator {
             drawTower(ctx, wallPoints[i].x, wallPoints[i].y, 14);
         }
 
-        // Gates: pick 2-3 roughly opposite points on the outline.
-        // We pick them at fixed fractions of the ring so the road system
-        // can find them later without re-computing.
-        const gateFractions = [0.0, 0.5];  // "north" and "south" equivalents on the deformed outline
-        for (const f of gateFractions) {
-            const idx = Math.floor(f * wallPoints.length);
-            const gate = wallPoints[idx];
+        // Gates (passed in by generate() so every pass agrees on positions)
+        for (const gate of gates) {
             ctx.fillStyle = PALETTES.city.wall;
             ctx.fillRect(gate.x - 8, gate.y - 4, 16, 8);
             ctx.fillStyle = '#3a2a1a';
