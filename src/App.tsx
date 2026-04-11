@@ -5,6 +5,8 @@ import { StatusBar } from './components/StatusBar';
 import { useGenerator } from './hooks/useGenerator';
 import { useLore } from './hooks/useLore';
 import { useAssets } from './hooks/useAssets';
+import { useZoom } from './hooks/useZoom';
+import { setWorldMapZoom } from './engine/generators/worldmap';
 import { exportCanvasAsPNG } from './utils';
 import type { ActivePanel } from './components/Sidebar/TabBar';
 
@@ -41,8 +43,36 @@ export default function App() {
     deletePack: deleteAssetPack,
   } = useAssets();
 
+  const zoom = useZoom();
+
   const [activePanel, setActivePanel] = useState<ActivePanel>('generator');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Pass the zoom controller to the worldmap generator once on mount
+  useEffect(() => {
+    setWorldMapZoom(zoom.controller);
+  }, [zoom.controller]);
+
+  // When the zoom level changes to 'city', auto-switch to the city
+  // generator using the clicked city's data. Going back to 'world'
+  // switches back to the world generator.
+  useEffect(() => {
+    if (zoom.level === 'city' && zoom.data) {
+      const cityGen = generators.find(g => g.id === 'citymap');
+      if (cityGen && activeGenerator?.id !== 'citymap') {
+        switchGenerator('citymap');
+      }
+      // Override seed and city name via config if available
+      if (zoom.data.seed !== undefined) {
+        updateConfig('seed', zoom.data.seed);
+      }
+      if (zoom.data.id) {
+        updateConfig('loreCityId', zoom.data.id);
+      }
+    } else if (zoom.level === 'world' && activeGenerator?.id !== 'worldmap') {
+      switchGenerator('worldmap');
+    }
+  }, [zoom.level, zoom.data, generators, activeGenerator, switchGenerator, updateConfig]);
 
   // Format last import result as a user-facing message
   const lastAssetImportMessage = useMemo(() => {
@@ -61,8 +91,9 @@ export default function App() {
   // Generate when canvas is ready or config changes
   const handleCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
     canvasRef.current = canvas;
+    zoom.bindCanvas(canvas);
     generate(canvas);
-  }, [generate]);
+  }, [generate, zoom]);
 
   // Auto-regenerate when config changes
   useEffect(() => {
@@ -139,11 +170,27 @@ export default function App() {
         case 'e': case 'E':
           if (e.ctrlKey) { e.preventDefault(); handleExport(); }
           break;
+        case 'Escape':
+          // Zoom out one level (city -> region -> world). Works only
+          // if the user is currently zoomed in.
+          if (zoom.isZoomed) {
+            e.preventDefault();
+            zoom.zoomOut();
+          }
+          break;
+        case 'Backspace':
+          // Same as Escape - backspace feels natural for "go back" in
+          // map navigation. Skipped when typing in a field.
+          if (zoom.isZoomed) {
+            e.preventDefault();
+            zoom.zoomOut();
+          }
+          break;
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [handleRandomize, handleGenerate, handleExport]);
+  }, [handleRandomize, handleGenerate, handleExport, zoom]);
 
   return (
     <div className="app-layout">
