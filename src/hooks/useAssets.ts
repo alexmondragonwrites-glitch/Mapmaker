@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { getAssetStore, type PackRecord } from '../engine/assets-runtime';
 import { importDrop, type ImportResult } from '../engine/assets-runtime/importer';
+import { autoLoadDevAssets } from '../engine/assets-runtime/devAutoLoader';
 
 export interface AssetSummary {
     totalPacks: number;
@@ -44,9 +45,23 @@ export function useAssets() {
         }
     }, []);
 
-    // Initial load
+    // Initial load: auto-import any local dev assets, then refresh
     useEffect(() => {
-        refresh();
+        let cancelled = false;
+        (async () => {
+            try {
+                await storeRef.current.open();
+                // Dev mode only: pull PNGs from the on-disk private-assets/ folder
+                const devCount = await autoLoadDevAssets(storeRef.current);
+                if (devCount > 0) {
+                    console.info(`[useAssets] auto-loaded ${devCount} dev assets from private-assets/`);
+                }
+            } catch (err) {
+                console.warn('[useAssets] dev auto-load failed:', err);
+            }
+            if (!cancelled) await refresh();
+        })();
+        return () => { cancelled = true; };
     }, [refresh]);
 
     const importFiles = useCallback(async (files: File[]) => {
