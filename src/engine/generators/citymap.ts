@@ -5,7 +5,149 @@
 
 import { SimplexNoise } from '../noise';
 import { NameGenerator, PALETTES, SeededRandom, clamp, distance } from '../../utils';
-import { drawHumanHouse, drawElvenHouse, drawDwarvenHouse, drawTower, drawTemple, drawTavern, drawCastle, drawTree, drawMapBorder } from '../assets';
+import {
+    drawHumanHouse, drawElvenHouse, drawDwarvenHouse,
+    drawTower, drawTemple, drawTavern, drawCastle, drawTree, drawMapBorder,
+    drawForge, drawChurch, drawGuildHall, drawWarehouse,
+    drawWell, drawFountain, drawMarketStall, drawWindmill,
+    drawStatue, drawBarracks, drawLibrary, drawDock,
+    drawShack, drawNobleHouse, drawShrine,
+} from '../assets';
+
+// ── District Building Mix Definitions ───────────────────────────────
+// Each district type has a weighted list of buildings it spawns.
+// weight = how often this building appears relative to others in the same district.
+
+type BuildingDrawFn = (ctx: any, x: number, y: number, size: number, options?: any) => void;
+
+interface BuildingEntry {
+    draw: BuildingDrawFn;
+    weight: number;
+    sizeMin: number;
+    sizeMax: number;
+}
+
+interface DistrictProfile {
+    buildings: BuildingEntry[];
+    density: number;      // building count multiplier (1.0 = normal)
+    spacing: number;      // min distance between buildings in px
+    groundTint: string;   // overlay color for the district ground
+    groundAlpha: number;  // opacity of the ground tint
+}
+
+const DISTRICT_PROFILES: Record<string, DistrictProfile> = {
+    markt: {
+        buildings: [
+            { draw: drawMarketStall, weight: 10, sizeMin: 10, sizeMax: 14 },
+            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 14 },
+            { draw: drawTavern,      weight: 2,  sizeMin: 14, sizeMax: 18 },
+            { draw: drawWell,        weight: 1,  sizeMin: 10, sizeMax: 12 },
+        ],
+        density: 1.2, spacing: 11,
+        groundTint: '#c4a868', groundAlpha: 0.25,
+    },
+    wohn: {
+        buildings: [
+            { draw: drawHumanHouse,  weight: 10, sizeMin: 10, sizeMax: 14 },
+            { draw: drawWell,        weight: 1,  sizeMin: 9,  sizeMax: 11 },
+            { draw: drawTavern,      weight: 1,  sizeMin: 14, sizeMax: 16 },
+        ],
+        density: 1.0, spacing: 12,
+        groundTint: '#8a7a5a', groundAlpha: 0.15,
+    },
+    handwerk: {
+        buildings: [
+            { draw: drawForge,       weight: 4,  sizeMin: 14, sizeMax: 18 },
+            { draw: drawHumanHouse,  weight: 6,  sizeMin: 10, sizeMax: 13 },
+            { draw: drawWarehouse,   weight: 3,  sizeMin: 16, sizeMax: 22 },
+            { draw: drawGuildHall,   weight: 1,  sizeMin: 18, sizeMax: 24 },
+        ],
+        density: 1.0, spacing: 14,
+        groundTint: '#6a5a4a', groundAlpha: 0.2,
+    },
+    adel: {
+        buildings: [
+            { draw: drawNobleHouse,  weight: 8,  sizeMin: 16, sizeMax: 22 },
+            { draw: drawLibrary,     weight: 1,  sizeMin: 20, sizeMax: 26 },
+            { draw: drawStatue,      weight: 2,  sizeMin: 12, sizeMax: 16 },
+            { draw: drawFountain,    weight: 1,  sizeMin: 14, sizeMax: 18 },
+        ],
+        density: 0.6, spacing: 22,
+        groundTint: '#b0a080', groundAlpha: 0.25,
+    },
+    hafen: {
+        buildings: [
+            { draw: drawWarehouse,   weight: 8,  sizeMin: 18, sizeMax: 24 },
+            { draw: drawTavern,      weight: 3,  sizeMin: 14, sizeMax: 18 },
+            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 13 },
+            { draw: drawDock,        weight: 3,  sizeMin: 18, sizeMax: 22 },
+        ],
+        density: 0.9, spacing: 16,
+        groundTint: '#6a6a5a', groundAlpha: 0.2,
+    },
+    tempel: {
+        buildings: [
+            { draw: drawChurch,      weight: 3,  sizeMin: 18, sizeMax: 24 },
+            { draw: drawShrine,      weight: 6,  sizeMin: 10, sizeMax: 14 },
+            { draw: drawTemple,      weight: 2,  sizeMin: 22, sizeMax: 28 },
+            { draw: drawStatue,      weight: 2,  sizeMin: 10, sizeMax: 14 },
+            { draw: drawHumanHouse,  weight: 2,  sizeMin: 10, sizeMax: 12 },
+        ],
+        density: 0.7, spacing: 18,
+        groundTint: '#aaa090', groundAlpha: 0.25,
+    },
+    garten: {
+        buildings: [
+            { draw: drawTree,        weight: 15, sizeMin: 8,  sizeMax: 14 },
+            { draw: drawFountain,    weight: 2,  sizeMin: 14, sizeMax: 18 },
+            { draw: drawStatue,      weight: 2,  sizeMin: 10, sizeMax: 14 },
+            { draw: drawShrine,      weight: 1,  sizeMin: 10, sizeMax: 12 },
+        ],
+        density: 0.9, spacing: 14,
+        groundTint: '#4a7a3a', groundAlpha: 0.3,
+    },
+    armen: {
+        buildings: [
+            { draw: drawShack,       weight: 15, sizeMin: 8,  sizeMax: 11 },
+            { draw: drawHumanHouse,  weight: 3,  sizeMin: 9,  sizeMax: 11 },
+            { draw: drawTavern,      weight: 1,  sizeMin: 12, sizeMax: 14 },
+        ],
+        density: 1.4, spacing: 9,
+        groundTint: '#4a3a2a', groundAlpha: 0.3,
+    },
+    akademie: {
+        buildings: [
+            { draw: drawLibrary,     weight: 4,  sizeMin: 20, sizeMax: 26 },
+            { draw: drawTower,       weight: 3,  sizeMin: 16, sizeMax: 22 },
+            { draw: drawStatue,      weight: 3,  sizeMin: 12, sizeMax: 16 },
+            { draw: drawHumanHouse,  weight: 4,  sizeMin: 10, sizeMax: 13 },
+            { draw: drawShrine,      weight: 1,  sizeMin: 10, sizeMax: 12 },
+        ],
+        density: 0.7, spacing: 18,
+        groundTint: '#9a90a0', groundAlpha: 0.2,
+    },
+    kaserne: {
+        buildings: [
+            { draw: drawBarracks,    weight: 6,  sizeMin: 18, sizeMax: 24 },
+            { draw: drawTower,       weight: 4,  sizeMin: 14, sizeMax: 18 },
+            { draw: drawWarehouse,   weight: 2,  sizeMin: 16, sizeMax: 20 },
+            { draw: drawStatue,      weight: 1,  sizeMin: 12, sizeMax: 14 },
+        ],
+        density: 0.7, spacing: 18,
+        groundTint: '#5a4a3a', groundAlpha: 0.25,
+    },
+};
+
+// Pick a weighted building from a district profile
+function pickBuilding(profile: DistrictProfile, rng: any): BuildingEntry {
+    const totalWeight = profile.buildings.reduce((s, b) => s + b.weight, 0);
+    let roll = rng.next() * totalWeight;
+    for (const entry of profile.buildings) {
+        roll -= entry.weight;
+        if (roll <= 0) return entry;
+    }
+    return profile.buildings[0];
+}
 
 // Lore integration - set externally
 let _loreManager = null;
