@@ -11,10 +11,23 @@ import {
     drawForge, drawChurch, drawGuildHall, drawWarehouse,
     drawWell, drawFountain, drawMarketStall, drawWindmill,
     drawStatue, drawBarracks, drawLibrary, drawDock,
-    drawShack, drawNobleHouse, drawShrine, drawBridge,
+    drawShack, drawNobleHouse, drawShrine,
 } from '../assets';
 import { tryDrawAsset } from '../assets-runtime/bridge';
 import type { AssetCategory } from '../assets-runtime';
+// Package C1: layout primitives (outline, gates, districts, walls, roads, bridges)
+// live in their own module. citymap.ts orchestrates; layout.ts owns geometry.
+import {
+    getCityRadius,
+    generateCityOutline,
+    computeGates,
+    generateDistricts,
+    renderDistrictGrounds,
+    renderWalls,
+    generateRoads,
+    renderRoads,
+    renderBridges,
+} from './citymap/layout';
 
 // Map procedural draw functions to their asset category, so the bridge
 // can look up PNG variants if the user has installed an asset pack.
@@ -288,17 +301,19 @@ export class CityMapGenerator {
         const names = new NameGenerator(cfg.seed);
 
         const cityName = cfg._loreName || names.generate('city');
-        const cityRadius = this._getCityRadius(cfg);
+        // Package C1: layout primitives live in citymap/layout.ts now.
+        // This class just wires them up with the local rng/noise/config.
+        const cityRadius = getCityRadius(cfg);
         const centerX = cfg.width / 2;
         const centerY = cfg.height / 2;
 
         // Generate organic city outline (noise-deformed polygon).
-        // This replaces the old "perfect circle with tiny wobble" approach.
+        // Replaces the old "perfect circle with tiny wobble" approach.
         // The outline is used for walls, district containment, and gate placement.
-        const outline = this._generateCityOutline(centerX, centerY, cityRadius, cfg.seed, noise);
+        const outline = generateCityOutline(centerX, centerY, cityRadius, cfg.seed, noise);
 
         // Compute gate positions once so walls, roads and countryside agree
-        const gates = this._computeGates(outline);
+        const gates = computeGates(outline);
 
         // Background - grass/terrain (sets cfg._biome)
         this._renderBackground(ctx, cfg, noise);
@@ -314,25 +329,30 @@ export class CityMapGenerator {
             this._renderRiver(ctx, cfg, riverPoints);
         }
 
-        // Generate districts organically inside the outline (Package C)
-        const districts = this._generateDistricts(cfg, rng, names, outline, riverPoints);
+        // Generate districts organically inside the outline
+        const districts = generateDistricts(cfg, rng, outline, riverPoints);
 
-        // District ground tinting (under walls and roads)
-        this._renderDistrictGrounds(ctx, districts);
+        // District ground tinting (under walls and roads).
+        // We pass a `tintOf` callback so layout.ts doesn't need to import
+        // DISTRICT_PROFILES (which currently lives here, will move in C3).
+        renderDistrictGrounds(ctx, districts, (type) => {
+            const profile = DISTRICT_PROFILES[type];
+            return profile ? { hex: profile.groundTint, alpha: profile.groundAlpha } : null;
+        });
 
         // City walls (follow the organic outline)
         if (cfg.hasWalls) {
-            this._renderWalls(ctx, cfg, outline, gates, rng);
+            renderWalls(ctx, outline, gates);
         }
 
         // Organic road network: gates on the outline, curved main roads,
         // plus branching secondary streets
-        const roads = this._generateRoads(cfg, outline, rng, districts);
-        this._renderRoads(ctx, cfg, roads);
+        const roads = generateRoads(outline, rng);
+        renderRoads(ctx, roads);
 
         // Bridges where roads cross the river
         if (cfg.hasRiver && riverPoints.length > 0) {
-            this._renderBridges(ctx, roads, riverPoints);
+            renderBridges(ctx, roads, riverPoints);
         }
 
         // Buildings per district
@@ -357,17 +377,6 @@ export class CityMapGenerator {
         // Border
         if (cfg.showBorder) {
             drawMapBorder(ctx, cfg.width, cfg.height, 'ornate');
-        }
-    }
-
-    _getCityRadius(cfg) {
-        const base = Math.min(cfg.width, cfg.height) * 0.35;
-        switch (cfg.citySize) {
-            case 'small': return base * 0.5;
-            case 'medium': return base * 0.7;
-            case 'large': return base * 0.85;
-            case 'metropolis': return base * 1.0;
-            default: return base * 0.7;
         }
     }
 
@@ -578,267 +587,6 @@ export class CityMapGenerator {
     }
 
     /**
-     * Place districts organically inside the city outline, respecting
-     * semantic placement rules (harbor near river, barracks near an
-     * edge, market near the heart, etc.) and enforcing Poisson-like
-     * minimum spacing so districts don't overlap.
-     */
-    _generateDistricts(cfg, rng, _names, outline, riverPoints) {
-        const districts: Array<any> = [];
-        const districtTypes = ['markt', 'wohn', 'handwerk', 'adel', 'hafen', 'tempel', 'garten', 'armen', 'akademie', 'kaserne'];
-        const districtNames: Record<string, string> = {
-            markt: 'Marktviertel', wohn: 'Wohnviertel', handwerk: 'Handwerkerviertel',
-            adel: 'Adelsviertel', hafen: 'Hafenviertel', tempel: 'Tempelviertel',
-            garten: 'Gartenviertel', armen: 'Armenviertel', akademie: 'Akademieviertel',
-            kaserne: 'Kasernenviertel'
-        };
-
-        const count = Math.min(cfg.districtCount, districtTypes.length);
-
-        // Always try to include key districts first, then fill with random ones.
-        // Market is the anchor and almost always appears.
-        const priority = ['markt', 'tempel', 'wohn', 'handwerk', 'hafen', 'adel', 'kaserne', 'akademie', 'garten', 'armen'];
-        const chosen = priority.slice(0, count);
-
-        const cx = outline.cx;
-        const cy = outline.cy;
-        const avgR = outline.avgRadius;
-
-        // Semantic placement preferences per district type:
-        //   centerBias: how strongly this district is pulled toward the city heart
-        //   edgeBias: how strongly it's pushed toward the outer walls
-        //   riverBias: how strongly it wants to be near the river (if any)
-        const prefs: Record<string, { centerBias: number; edgeBias: number; riverBias: number }> = {
-            markt:    { centerBias: 0.9, edgeBias: 0.0, riverBias: 0.0 },
-            tempel:   { centerBias: 0.6, edgeBias: 0.0, riverBias: 0.0 },
-            adel:     { centerBias: 0.7, edgeBias: 0.0, riverBias: 0.0 },
-            akademie: { centerBias: 0.5, edgeBias: 0.0, riverBias: 0.0 },
-            wohn:     { centerBias: 0.2, edgeBias: 0.2, riverBias: 0.0 },
-            handwerk: { centerBias: 0.1, edgeBias: 0.3, riverBias: 0.2 },
-            hafen:    { centerBias: 0.0, edgeBias: 0.6, riverBias: 1.0 },
-            armen:    { centerBias: 0.0, edgeBias: 0.7, riverBias: 0.0 },
-            kaserne:  { centerBias: 0.0, edgeBias: 0.8, riverBias: 0.0 },
-            garten:   { centerBias: 0.1, edgeBias: 0.4, riverBias: 0.0 },
-        };
-
-        for (const type of chosen) {
-            const p = prefs[type] || { centerBias: 0.4, edgeBias: 0.3, riverBias: 0 };
-
-            // Try many candidate positions and pick the best according to
-            // semantic preferences plus spacing from other districts.
-            let bestX = cx;
-            let bestY = cy;
-            let bestScore = -Infinity;
-
-            for (let attempt = 0; attempt < 60; attempt++) {
-                // Sample a point inside the outline using polar coordinates
-                const angle = rng.nextFloat(0, Math.PI * 2);
-                // Distance from center biased by district preference
-                const maxR = outline.radiusAt(angle) * 0.85;
-                // t=0 -> center, t=1 -> edge
-                let t;
-                if (p.centerBias > p.edgeBias) {
-                    // Favor center: square root biases toward small values
-                    t = rng.nextFloat(0, 1) * rng.nextFloat(0, 1);
-                } else {
-                    // Favor edge: square biases toward large values
-                    t = Math.sqrt(rng.nextFloat(0, 1));
-                }
-                const dist = t * maxR;
-                const x = cx + Math.cos(angle) * dist;
-                const y = cy + Math.sin(angle) * dist;
-
-                // Score: start neutral, add/subtract based on preferences
-                let score = 0;
-
-                // Center preference
-                const centerDist = Math.hypot(x - cx, y - cy);
-                score += (1 - centerDist / avgR) * p.centerBias * 10;
-                // Edge preference
-                score += (centerDist / avgR) * p.edgeBias * 10;
-
-                // River preference: distance to the nearest river point
-                if (p.riverBias > 0 && riverPoints.length > 0) {
-                    let minRiverDist = Infinity;
-                    for (const rp of riverPoints) {
-                        const d = Math.hypot(x - rp.x, y - rp.y);
-                        if (d < minRiverDist) minRiverDist = d;
-                    }
-                    // Close to river = good
-                    const normalized = Math.min(1, minRiverDist / avgR);
-                    score += (1 - normalized) * p.riverBias * 12;
-                }
-
-                // Spacing: penalize being too close to existing districts
-                let tooClose = false;
-                for (const d of districts) {
-                    const dd = Math.hypot(x - d.x, y - d.y);
-                    const minSpacing = d.radius + avgR * 0.15;
-                    if (dd < minSpacing) { tooClose = true; break; }
-                    // Soft penalty: prefer spacing of avgR * 0.3
-                    if (dd < avgR * 0.3) score -= (avgR * 0.3 - dd) * 0.5;
-                }
-                if (tooClose) continue;
-
-                // Small random component so ties break randomly
-                score += rng.nextFloat(0, 2);
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestX = x;
-                    bestY = y;
-                }
-            }
-
-            // Always place the district even if no ideal spot was found
-            const radius = avgR * rng.nextFloat(0.18, 0.28);
-            districts.push({
-                x: bestX,
-                y: bestY,
-                type,
-                name: districtNames[type],
-                radius,
-                angle: Math.atan2(bestY - cy, bestX - cx),
-            });
-        }
-
-        return districts;
-    }
-
-    _renderDistrictGrounds(ctx, districts) {
-        // Paint a soft radial tint under each district to visually separate
-        // them. Drawn before walls/roads so those overlay the tints.
-        ctx.save();
-        for (const district of districts) {
-            const profile = DISTRICT_PROFILES[district.type];
-            if (!profile) continue;
-
-            // Radial gradient: full tint at center, fading to nothing at edge
-            const gradient = ctx.createRadialGradient(
-                district.x, district.y, 0,
-                district.x, district.y, district.radius * 1.15
-            );
-
-            // Parse hex color
-            const hex = profile.groundTint;
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-
-            gradient.addColorStop(0,    `rgba(${r}, ${g}, ${b}, ${profile.groundAlpha})`);
-            gradient.addColorStop(0.7,  `rgba(${r}, ${g}, ${b}, ${profile.groundAlpha * 0.5})`);
-            gradient.addColorStop(1,    `rgba(${r}, ${g}, ${b}, 0)`);
-
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(district.x, district.y, district.radius * 1.15, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.restore();
-    }
-
-    /**
-     * Generate an organic city outline: a noise-deformed polygon centered
-     * on (cx, cy) with a base radius of `baseRadius`. The deformation
-     * combines several noise octaves plus a random directional stretch
-     * so no two cities look the same and none of them look like a circle.
-     *
-     * Returns an object with:
-     *  - points[]: the polygon vertices
-     *  - cx, cy, baseRadius, avgRadius, maxRadius: bookkeeping
-     *  - containsPoint(x, y): predicate to check if a point is inside
-     *  - radiusAt(angle): the outline radius at a given angle
-     */
-    _generateCityOutline(cx, cy, baseRadius, seed, noise) {
-        // Directional stretch: pick a preferred "growth axis" so cities are
-        // elongated rather than perfectly round. Offsets come from the seed
-        // so the same seed always produces the same city shape.
-        const stretchAngle = ((seed * 0.0001) % 1) * Math.PI * 2;
-        const stretchAmount = 0.15 + ((seed * 0.00013) % 1) * 0.25;  // 15-40%
-
-        // Asymmetric blob radius: bigger in one half, smaller in the other
-        const lobeAngle = stretchAngle + Math.PI * 0.5;
-        const lobeStrength = 0.08 + ((seed * 0.00017) % 1) * 0.14;   // 8-22%
-
-        // Number of outline samples - more = smoother
-        const segments = 96;
-        const points: Array<{ x: number; y: number; angle: number; r: number }> = [];
-
-        // Precompute the radius function so we can reuse it
-        const radiusAt = (angle: number) => {
-            // Normalized direction vector for noise sampling
-            const dx = Math.cos(angle);
-            const dy = Math.sin(angle);
-
-            // Multi-octave noise around the center of the city
-            const n1 = noise.noise2D(dx * 1.3, dy * 1.3);          // large lobes
-            const n2 = noise.noise2D(dx * 3.1 + 50, dy * 3.1 + 50); // medium bumps
-            const n3 = noise.noise2D(dx * 6.2 + 99, dy * 6.2 + 99); // small bulges
-            const combined = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
-
-            // Directional stretch: project angle onto the stretch axis
-            const stretchDot = Math.cos(angle - stretchAngle);
-            const stretchMul = 1 + stretchDot * stretchDot * stretchAmount;
-
-            // Extra lobe in one direction
-            const lobeDot = Math.max(0, Math.cos(angle - lobeAngle));
-            const lobeMul = 1 + lobeDot * lobeStrength;
-
-            // Combined deformation: ±35% from noise plus the axis stretching
-            const deform = (1 + combined * 0.35) * stretchMul * lobeMul;
-            return baseRadius * deform;
-        };
-
-        for (let i = 0; i < segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            const r = radiusAt(angle);
-            points.push({
-                x: cx + Math.cos(angle) * r,
-                y: cy + Math.sin(angle) * r,
-                angle,
-                r,
-            });
-        }
-
-        // Also compute avgRadius / maxRadius for use by other methods
-        let sumR = 0;
-        let maxR = 0;
-        for (const p of points) {
-            sumR += p.r;
-            if (p.r > maxR) maxR = p.r;
-        }
-        const avgRadius = sumR / points.length;
-
-        return {
-            points,
-            cx,
-            cy,
-            baseRadius,
-            avgRadius,
-            maxRadius: maxR,
-            radiusAt,
-            containsPoint(x: number, y: number, margin = 0) {
-                const angle = Math.atan2(y - cy, x - cx);
-                const d = Math.hypot(x - cx, y - cy);
-                return d <= radiusAt(angle) - margin;
-            },
-        };
-    }
-
-    /**
-     * Compute gate positions along the outline. Gates are picked at fixed
-     * fractions of the outline so roads and countryside use the same points.
-     */
-    _computeGates(outline) {
-        const pts = outline.points;
-        const gateFractions = [0.0, 0.25, 0.5, 0.75];
-        return gateFractions.map(f => {
-            const idx = Math.floor(f * pts.length);
-            return { x: pts[idx].x, y: pts[idx].y, idx };
-        });
-    }
-
-    /**
      * Countryside features outside the walls: outbound roads from each gate,
      * farmland plots along those roads, scattered farmsteads, small ponds.
      * Drawn after the background and before the river/districts so the
@@ -1007,256 +755,6 @@ export class CityMapGenerator {
                 ctx.stroke();
             }
             ctx.restore();
-        }
-    }
-
-    _renderWalls(ctx, cfg, outline, gates, _rng) {
-        ctx.save();
-
-        const wallPoints = outline.points;
-
-        // Wall shadow
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 10;
-        this._drawPath(ctx, wallPoints);
-
-        // Wall body
-        ctx.strokeStyle = PALETTES.city.wall;
-        ctx.lineWidth = 6;
-        this._drawPath(ctx, wallPoints);
-
-        // Wall top
-        ctx.strokeStyle = PALETTES.city.wallTop;
-        ctx.lineWidth = 3;
-        this._drawPath(ctx, wallPoints);
-
-        // Towers every ~8 segments along the outline
-        const towerCount = 8;
-        const towerStep = Math.floor(wallPoints.length / towerCount);
-        for (let i = 0; i < wallPoints.length; i += towerStep) {
-            drawTower(ctx, wallPoints[i].x, wallPoints[i].y, 14);
-        }
-
-        // Gates (passed in by generate() so every pass agrees on positions)
-        for (const gate of gates) {
-            ctx.fillStyle = PALETTES.city.wall;
-            ctx.fillRect(gate.x - 8, gate.y - 4, 16, 8);
-            ctx.fillStyle = '#3a2a1a';
-            ctx.fillRect(gate.x - 4, gate.y - 3, 8, 6);
-        }
-
-        ctx.restore();
-    }
-
-    _drawPath(ctx, points) {
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-    }
-
-    /**
-     * Organic road network:
-     *
-     * 1. Pick 2-4 gates as sample points along the outline polygon.
-     * 2. Build "main roads": Bezier curves from each gate toward a
-     *    central plaza near the city heart. The plaza is offset from
-     *    the geometric center using noise, so the crossroads are never
-     *    exactly in the middle.
-     * 3. Add secondary branches that start on main roads and wander
-     *    toward random interior points, so blocks get subdivided.
-     * 4. No perfectly concentric ring roads anywhere.
-     */
-    _generateRoads(cfg, outline, rng, _districts) {
-        const roads: Array<{ type: string; points: Array<{x:number;y:number}>; width: number }> = [];
-        const cx = outline.cx;
-        const cy = outline.cy;
-
-        // City heart: offset from the geometric center by ±15% of average radius
-        const heartJitter = outline.avgRadius * 0.15;
-        const heart = {
-            x: cx + rng.nextFloat(-heartJitter, heartJitter),
-            y: cy + rng.nextFloat(-heartJitter, heartJitter),
-        };
-
-        // Pick 3-4 gates on the outline - evenly spaced indices but with jitter
-        const gateCount = rng.nextInt(3, 4);
-        const pts = outline.points;
-        const gates: Array<{x:number;y:number}> = [];
-        const gateIndices: number[] = [];
-        for (let i = 0; i < gateCount; i++) {
-            const baseIdx = Math.floor((i / gateCount) * pts.length);
-            const jitter = rng.nextInt(-5, 5);
-            const idx = ((baseIdx + jitter) % pts.length + pts.length) % pts.length;
-            gateIndices.push(idx);
-            gates.push({ x: pts[idx].x, y: pts[idx].y });
-        }
-
-        // Build main roads: each gate connects to the heart through a curved path.
-        // We emit a polyline of ~20 points sampled along a quadratic Bezier with
-        // a control point offset perpendicular to the straight line.
-        for (const gate of gates) {
-            const dx = heart.x - gate.x;
-            const dy = heart.y - gate.y;
-            const len = Math.hypot(dx, dy);
-            // Perpendicular offset for the control point (curvature)
-            const px = -dy / len;
-            const py = dx / len;
-            const curve = rng.nextFloat(-len * 0.15, len * 0.15);
-            const controlX = (gate.x + heart.x) / 2 + px * curve;
-            const controlY = (gate.y + heart.y) / 2 + py * curve;
-
-            const samples = 20;
-            const points: Array<{x:number;y:number}> = [];
-            for (let t = 0; t <= samples; t++) {
-                const u = t / samples;
-                const mt = 1 - u;
-                // Quadratic Bezier
-                const x = mt * mt * gate.x + 2 * mt * u * controlX + u * u * heart.x;
-                const y = mt * mt * gate.y + 2 * mt * u * controlY + u * u * heart.y;
-                points.push({ x, y });
-            }
-            roads.push({ type: 'main', points, width: 5 });
-        }
-
-        // Small plaza ring around the heart (not a full city-wide ring)
-        const plazaRadius = outline.avgRadius * 0.08;
-        const plazaPoints: Array<{x:number;y:number}> = [];
-        for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.2) {
-            plazaPoints.push({
-                x: heart.x + Math.cos(a) * plazaRadius,
-                y: heart.y + Math.sin(a) * plazaRadius,
-            });
-        }
-        roads.push({ type: 'plaza', points: plazaPoints, width: 4 });
-
-        // Branching secondary streets: start on a random main road segment,
-        // wander toward a random interior point inside the outline.
-        const branchCount = 6 + Math.floor(gateCount * 2);
-        for (let b = 0; b < branchCount; b++) {
-            // Pick a random main road
-            const mainRoads = roads.filter(r => r.type === 'main');
-            if (mainRoads.length === 0) break;
-            const source = mainRoads[rng.nextInt(0, mainRoads.length - 1)];
-
-            // Start at a random point along its length (not at the endpoints)
-            const startIdx = rng.nextInt(2, source.points.length - 3);
-            const start = source.points[startIdx];
-
-            // Pick a target inside the outline, away from the start
-            let target: {x:number;y:number} | null = null;
-            for (let attempt = 0; attempt < 10; attempt++) {
-                const tAngle = rng.nextFloat(0, Math.PI * 2);
-                const tDist = rng.nextFloat(outline.avgRadius * 0.2, outline.avgRadius * 0.7);
-                const tx = cx + Math.cos(tAngle) * tDist;
-                const ty = cy + Math.sin(tAngle) * tDist;
-                // Must be inside the outline and not too close to the start
-                if (outline.containsPoint(tx, ty, 10) && Math.hypot(tx - start.x, ty - start.y) > 40) {
-                    target = { x: tx, y: ty };
-                    break;
-                }
-            }
-            if (!target) continue;
-
-            // Build a slightly wiggly polyline from start to target
-            const segLen = 12;
-            const totalDist = Math.hypot(target.x - start.x, target.y - start.y);
-            const steps = Math.max(2, Math.ceil(totalDist / segLen));
-            const branchPoints: Array<{x:number;y:number}> = [];
-            const sdx = (target.x - start.x) / steps;
-            const sdy = (target.y - start.y) / steps;
-            // Perpendicular wiggle direction
-            const wiggleLen = Math.hypot(sdx, sdy);
-            const wpx = wiggleLen > 0 ? -sdy / wiggleLen : 0;
-            const wpy = wiggleLen > 0 ?  sdx / wiggleLen : 0;
-
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                // Sinusoidal wiggle that starts and ends at zero
-                const wiggle = Math.sin(t * Math.PI) * rng.nextFloat(-6, 6);
-                branchPoints.push({
-                    x: start.x + sdx * i + wpx * wiggle,
-                    y: start.y + sdy * i + wpy * wiggle,
-                });
-            }
-            roads.push({ type: 'branch', points: branchPoints, width: 2.5 });
-        }
-
-        return roads;
-    }
-
-    _renderRoads(ctx, cfg, roads) {
-        ctx.save();
-
-        for (const road of roads) {
-            // Road shadow
-            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-            ctx.lineWidth = road.width + 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.beginPath();
-            ctx.moveTo(road.points[0].x, road.points[0].y);
-            for (let i = 1; i < road.points.length; i++) {
-                ctx.lineTo(road.points[i].x, road.points[i].y);
-            }
-            ctx.stroke();
-
-            // Road surface
-            ctx.strokeStyle = PALETTES.city.road;
-            ctx.lineWidth = road.width;
-            ctx.beginPath();
-            ctx.moveTo(road.points[0].x, road.points[0].y);
-            for (let i = 1; i < road.points.length; i++) {
-                ctx.lineTo(road.points[i].x, road.points[i].y);
-            }
-            ctx.stroke();
-        }
-
-        ctx.restore();
-    }
-
-    _renderBridges(ctx, roads, riverPoints) {
-        // Find points where roads cross the river and drop a bridge there.
-        // We sample the river as a polyline and check each road segment.
-        const bridgeThreshold = 8;    // how close a road point must be to a river point
-        const minBridgeSpacing = 40;  // don't place two bridges closer than this
-
-        const placedBridges: Array<{ x: number; y: number }> = [];
-
-        for (const road of roads) {
-            for (let i = 0; i < road.points.length - 1; i++) {
-                const a = road.points[i];
-                const b = road.points[i + 1];
-
-                // Check the midpoint of each road segment against the river
-                const mx = (a.x + b.x) / 2;
-                const my = (a.y + b.y) / 2;
-
-                for (const rp of riverPoints) {
-                    const d = Math.hypot(mx - rp.x, my - rp.y);
-                    if (d >= bridgeThreshold) continue;
-
-                    // Too close to an existing bridge?
-                    let tooClose = false;
-                    for (const bridge of placedBridges) {
-                        if (Math.hypot(mx - bridge.x, my - bridge.y) < minBridgeSpacing) {
-                            tooClose = true;
-                            break;
-                        }
-                    }
-                    if (tooClose) break;
-
-                    // Bridge orientation: follow the road direction so the
-                    // bridge sits lengthwise across the river.
-                    const angle = Math.atan2(b.y - a.y, b.x - a.x);
-                    drawBridge(ctx, rp.x, rp.y, 22, angle);
-                    placedBridges.push({ x: rp.x, y: rp.y });
-                    break;
-                }
-            }
         }
     }
 
