@@ -23,6 +23,7 @@ export default function App() {
     isGenerating,
     switchGenerator,
     generate,
+    rerenderOverlay,
     randomize,
     updateConfig,
     setAfterGenerate,
@@ -103,17 +104,23 @@ export default function App() {
 
   // Re-render whenever placements change (add/remove) so the overlay
   // updates immediately. Skip the first mount - the canvas-ready
-  // effect already does the initial render.
+  // effect already does the initial render. We reuse the cached base
+  // snapshot via `rerenderOverlay` so adding or removing a placement
+  // is O(pixels) instead of re-running the procedural generator. On
+  // the very first placement change there may be no snapshot yet
+  // (e.g. load from storage before the canvas is ready); in that
+  // case fall back to a full generate.
   const firstPlacementSync = useRef(true);
   useEffect(() => {
     if (firstPlacementSync.current) {
       firstPlacementSync.current = false;
       return;
     }
-    if (canvasRef.current && activeGenerator) {
+    if (!canvasRef.current || !activeGenerator) return;
+    if (!rerenderOverlay()) {
       generate(canvasRef.current);
     }
-  }, [placedAssets, activeGenerator, generate]);
+  }, [placedAssets, activeGenerator, generate, rerenderOverlay]);
 
   // When the zoom level changes to 'city', auto-switch to the city
   // generator using the clicked city's data. Going back to 'world'
@@ -173,19 +180,30 @@ export default function App() {
   // the canvas. setupInteraction returns a cleanup that must run when
   // the user switches to a different generator so the listeners don't
   // leak and fire on the wrong map.
+  //
+  // We pass both a full `regenerate` (for clicks that mutate tokens
+  // and need the procedural generator to redraw them) and a cheap
+  // `rerenderOverlay` (for mousemove hover highlights, which just
+  // need to restore the base + redraw placements + draw the hover
+  // rect). Without this split, every hovered grid cell used to
+  // trigger a full procedural regen, which was the #1 source of
+  // battle-map lag.
   useEffect(() => {
     if (!canvasRef.current || !activeGenerator) return;
     const inst = activeGenerator.instance as any;
     if (activeGenerator.id === 'battlemap' && typeof inst.setupInteraction === 'function') {
-      const cleanup = inst.setupInteraction(canvasRef.current, () => {
-        if (canvasRef.current) generate(canvasRef.current);
+      const cleanup = inst.setupInteraction(canvasRef.current, {
+        regenerate: () => {
+          if (canvasRef.current) generate(canvasRef.current);
+        },
+        rerenderOverlay: () => rerenderOverlay(),
       });
       return () => {
         if (typeof cleanup === 'function') cleanup();
       };
     }
     return undefined;
-  }, [activeGenerator, generate]);
+  }, [activeGenerator, generate, rerenderOverlay]);
 
   // Re-render once the asset cache finishes loading (so the first
   // render after page load can pick up PNG assets from IndexedDB)

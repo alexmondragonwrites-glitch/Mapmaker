@@ -29,6 +29,19 @@ export function useGenerator() {
     afterHookRef.current = hook;
   }, []);
 
+  // Snapshot of the canvas taken right after the procedural generator
+  // finishes but BEFORE the afterGenerate overlay hook runs. This lets
+  // fast paths (placement add/remove, battle-map hover) redraw the
+  // dynamic overlay layer without re-running the expensive base
+  // generator. Stored as an offscreen HTMLCanvasElement so a single
+  // drawImage call restores the full base in O(pixels).
+  const baseSnapshotRef = useRef<HTMLCanvasElement | null>(null);
+  const lastRenderRef = useRef<{
+    canvas: HTMLCanvasElement;
+    generatorId: string;
+    config: GeneratorConfig;
+  } | null>(null);
+
   // Initialize registry once
   useEffect(() => {
     const registry = new GeneratorRegistry();
@@ -63,6 +76,32 @@ export function useGenerator() {
     requestAnimationFrame(() => {
       try {
         activeGenerator.instance.generate(canvas, config);
+
+        // Snapshot the base layer before the overlay hook runs so
+        // placement changes and hover highlights can redraw without
+        // re-running the procedural generator.
+        let snapshot = baseSnapshotRef.current;
+        if (
+          !snapshot
+          || snapshot.width !== canvas.width
+          || snapshot.height !== canvas.height
+        ) {
+          snapshot = document.createElement('canvas');
+          snapshot.width = canvas.width;
+          snapshot.height = canvas.height;
+          baseSnapshotRef.current = snapshot;
+        }
+        const snapshotCtx = snapshot.getContext('2d');
+        if (snapshotCtx) {
+          snapshotCtx.clearRect(0, 0, snapshot.width, snapshot.height);
+          snapshotCtx.drawImage(canvas, 0, 0);
+        }
+        lastRenderRef.current = {
+          canvas,
+          generatorId: activeGenerator.id,
+          config,
+        };
+
         // Post-generate overlay (manual placed assets). Any error
         // here is logged but doesn't roll back the base render.
         try {
@@ -78,6 +117,33 @@ export function useGenerator() {
       setIsGenerating(false);
     });
   }, [activeGenerator, config, isGenerating]);
+
+  /**
+   * Cheap redraw: restores the last base snapshot and re-runs the
+   * afterGenerate overlay hook. Use this when the only thing that
+   * changed is the overlay layer (e.g. a placement was added, or a
+   * battle-map hover cell moved) - it avoids re-running the expensive
+   * procedural generator by reusing the already-rendered base.
+   *
+   * Falls back silently if no snapshot is available yet (first render
+   * hasn't happened). Returns true when a redraw actually ran so
+   * callers can decide whether to follow up with a full generate.
+   */
+  const rerenderOverlay = useCallback((): boolean => {
+    const snapshot = baseSnapshotRef.current;
+    const last = lastRenderRef.current;
+    if (!snapshot || !last) return false;
+    const ctx = last.canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.clearRect(0, 0, last.canvas.width, last.canvas.height);
+    ctx.drawImage(snapshot, 0, 0);
+    try {
+      afterHookRef.current?.(last.canvas, last.generatorId, last.config);
+    } catch (hookErr) {
+      console.error('afterGenerate hook failed:', hookErr);
+    }
+    return true;
+  }, []);
 
   const randomize = useCallback(() => {
     const newSeed = Math.floor(Math.random() * 100000);
@@ -96,6 +162,7 @@ export function useGenerator() {
     isGenerating,
     switchGenerator,
     generate,
+    rerenderOverlay,
     randomize,
     updateConfig,
     setAfterGenerate,

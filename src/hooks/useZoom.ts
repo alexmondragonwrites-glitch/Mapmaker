@@ -245,21 +245,53 @@ export function useZoom(): UseZoomResult {
             };
         };
 
-        const handleMove = (e: MouseEvent) => {
+        // rAF-throttle the hit test + cursor update so that bursts of
+        // mousemove events (which can fire 100+ times per second on
+        // high-refresh mice) collapse into at most one update per
+        // frame. Also cache the last cursor value so we only poke
+        // `style.cursor` when it actually changes — every assignment
+        // triggers a style recalculation even when the value is the
+        // same, which is noticeable when hovering over a worldmap
+        // with many clickable city areas.
+        let pendingFrame: number | null = null;
+        let pendingEvent: { x: number; y: number } | null = null;
+        let lastCursor = '';
+        const setCursor = (value: string) => {
+            if (lastCursor === value) return;
+            lastCursor = value;
+            canvas.style.cursor = value;
+        };
+
+        const runHitTest = () => {
+            pendingFrame = null;
+            const pt = pendingEvent;
+            pendingEvent = null;
+            if (!pt) return;
+            mouseRef.current = { x: pt.x, y: pt.y };
             if (areasRef.current.length === 0) {
-                canvas.style.cursor = '';
+                setCursor('');
                 return;
             }
-            const { x, y } = toCanvasCoords(e);
-            mouseRef.current = { x, y };
             let over = false;
             for (const area of areasRef.current) {
-                if (isPointInArea(x, y, area)) {
+                if (isPointInArea(pt.x, pt.y, area)) {
                     over = true;
                     break;
                 }
             }
-            canvas.style.cursor = over ? 'pointer' : '';
+            setCursor(over ? 'pointer' : '');
+        };
+
+        const handleMove = (e: MouseEvent) => {
+            // Cheap fast path: no clickable areas means there's
+            // nothing to hit-test and no cursor state to maintain.
+            if (areasRef.current.length === 0) {
+                setCursor('');
+                return;
+            }
+            pendingEvent = toCanvasCoords(e);
+            if (pendingFrame !== null) return;
+            pendingFrame = requestAnimationFrame(runHitTest);
         };
 
         const handleClick = (e: MouseEvent) => {
@@ -279,6 +311,10 @@ export function useZoom(): UseZoomResult {
         return () => {
             canvas.removeEventListener('mousemove', handleMove);
             canvas.removeEventListener('click', handleClick);
+            if (pendingFrame !== null) {
+                cancelAnimationFrame(pendingFrame);
+                pendingFrame = null;
+            }
         };
     }, [zoomIn]);
 

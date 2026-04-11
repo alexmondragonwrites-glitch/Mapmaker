@@ -75,8 +75,18 @@ function newId(): string {
 export function usePlacedAssets() {
     const [placements, setPlacements] = useState<PlacedAsset[]>(() => loadFromStorage());
 
-    // Persist on every change. Debounce would be nicer for bulk drags
-    // but individual placements are infrequent so this is fine.
+    // Track the latest placements in a ref so the `pagehide` flush
+    // callback can read them without being re-subscribed on every
+    // change.
+    const placementsRef = useRef(placements);
+    useEffect(() => { placementsRef.current = placements; }, [placements]);
+
+    // Persist on every change, but debounced: the old implementation
+    // did a synchronous localStorage.setItem + full JSON.stringify on
+    // every single add/remove, which blocks the main thread and is
+    // noticeable when the user places several assets in a row (or
+    // when a map load replaces the full set). Debouncing coalesces
+    // bursts into a single write ~300ms after the last change.
     const initialMount = useRef(true);
     useEffect(() => {
         // Skip the initial load - we just read from storage
@@ -84,8 +94,19 @@ export function usePlacedAssets() {
             initialMount.current = false;
             return;
         }
-        saveToStorage(placements);
+        const handle = setTimeout(() => {
+            saveToStorage(placements);
+        }, 300);
+        return () => clearTimeout(handle);
     }, [placements]);
+
+    // Flush any pending save on unload so the user doesn't lose a
+    // placement made in the last 300ms before closing the tab.
+    useEffect(() => {
+        const flush = () => saveToStorage(placementsRef.current);
+        window.addEventListener('pagehide', flush);
+        return () => window.removeEventListener('pagehide', flush);
+    }, []);
 
     /** Add a new placement and return its id. */
     const add = useCallback((p: Omit<PlacedAsset, 'id'>): string => {

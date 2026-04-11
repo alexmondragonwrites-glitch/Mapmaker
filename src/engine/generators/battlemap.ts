@@ -426,18 +426,34 @@ export class BattleMapGenerator {
     // accumulate stale listeners on the canvas element and cause
     // duplicate token placements / memory leaks.
     //
+    // The caller passes either:
+    //   - a legacy plain function (treated as the full regenerate
+    //     callback, kept for backwards compat), or
+    //   - an object `{ regenerate, rerenderOverlay }` where the cheap
+    //     `rerenderOverlay` is used for hover highlights and the full
+    //     `regenerate` is reserved for token mutations.
+    //
     // Each call:
     //   1. Runs the previous cleanup (if any)
     //   2. Creates fresh handlers captured to `this`
     //   3. Stores a new cleanup closure on `this._interactionCleanup`
     //   4. Returns the cleanup so the caller can also dispose early
 
-    setupInteraction(canvas, regenerateCallback) {
+    setupInteraction(canvas, callbacks) {
         // Dispose previous listeners if this method is called again
         if (typeof this._interactionCleanup === 'function') {
             this._interactionCleanup();
             this._interactionCleanup = null;
         }
+
+        const regenerate = typeof callbacks === 'function'
+            ? callbacks
+            : callbacks?.regenerate;
+        // Cheap overlay redraw. Falls back to a full regenerate when
+        // the host didn't supply a snapshot-based redraw (old callers).
+        const rerenderOverlay = typeof callbacks === 'object' && callbacks
+            ? callbacks.rerenderOverlay
+            : null;
 
         const handleClick = (e) => {
             if (!this.selectedEnemyType) return;
@@ -466,18 +482,72 @@ export class BattleMapGenerator {
                 });
             }
 
-            regenerateCallback();
+            // Token mutations need a full regen because _renderTokens
+            // runs inside battlemap.generate() and is baked into the
+            // base snapshot.
+            regenerate?.();
+        };
+
+        // Draw (or erase) the hover highlight for a specific cell
+        // without touching the rest of the canvas. Called from the
+        // throttled mousemove handler below.
+        const applyHover = (col, row) => {
+            const cfg = this.interactiveConfig;
+            if (!cfg) return;
+            // Restore the base+overlay from snapshot so any previous
+            // hover rect is wiped without rerunning the generator.
+            let restored = false;
+            if (rerenderOverlay) {
+                restored = rerenderOverlay() === true;
+            }
+            if (!restored) {
+                // No snapshot path available - fall back to full regen
+                // (legacy behaviour). Still slow, but correct.
+                regenerate?.();
+            }
+
+            if (col >= 0 && col < cfg.gridCols && row >= 0 && row < cfg.gridRows) {
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = PALETTES.battle.gridHover;
+                    ctx.fillRect(col * cfg.gridSize, row * cfg.gridSize, cfg.gridSize, cfg.gridSize);
+                }
+            }
+        };
+
+        // rAF-coalesce hover redraws so that several mousemove events
+        // fired in the same frame only result in one canvas update.
+        let pendingFrame: number | null = null;
+        let pendingCell: { col: number; row: number } | null = null;
+        const scheduleHoverRedraw = (col, row) => {
+            pendingCell = { col, row };
+            if (pendingFrame !== null) return;
+            pendingFrame = requestAnimationFrame(() => {
+                pendingFrame = null;
+                const cell = pendingCell;
+                pendingCell = null;
+                if (!cell) return;
+                applyHover(cell.col, cell.row);
+            });
+        };
+
+        let lastCursor = '';
+        const setCursor = (value) => {
+            if (lastCursor === value) return;
+            lastCursor = value;
+            canvas.style.cursor = value;
         };
 
         const handleMove = (e) => {
             if (!this.selectedEnemyType) {
-                canvas.style.cursor = 'default';
+                setCursor('default');
                 return;
             }
 
-            canvas.style.cursor = 'crosshair';
+            setCursor('crosshair');
             const rect = canvas.getBoundingClientRect();
             const cfg = this.interactiveConfig;
+            if (!cfg) return;
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             const x = (e.clientX - rect.left) * scaleX;
@@ -488,13 +558,7 @@ export class BattleMapGenerator {
 
             if (this.hoveredCell?.col !== col || this.hoveredCell?.row !== row) {
                 this.hoveredCell = { col, row };
-                regenerateCallback();
-
-                const ctx = canvas.getContext('2d');
-                if (col >= 0 && col < cfg.gridCols && row >= 0 && row < cfg.gridRows) {
-                    ctx.fillStyle = PALETTES.battle.gridHover;
-                    ctx.fillRect(col * cfg.gridSize, row * cfg.gridSize, cfg.gridSize, cfg.gridSize);
-                }
+                scheduleHoverRedraw(col, row);
             }
         };
 
@@ -504,6 +568,10 @@ export class BattleMapGenerator {
         this._interactionCleanup = () => {
             canvas.removeEventListener('click', handleClick);
             canvas.removeEventListener('mousemove', handleMove);
+            if (pendingFrame !== null) {
+                cancelAnimationFrame(pendingFrame);
+                pendingFrame = null;
+            }
             canvas.style.cursor = 'default';
         };
 
