@@ -25,19 +25,24 @@ export interface ImportResult {
 /**
  * Decide whether a file path should be skipped during import.
  *
- * Wonderdraft asset packs come with multiple non-asset files:
- *  - `.wonderdraft_symbols` / `.wonderdraft_icon` config blobs
- *  - `_normal.png` (icon), `_custom.png`, `_sample.png` (UI thumbs,
- *    not the actual map asset!). The tiny coloured "marker" icons
- *    the user was seeing on their map came from the _sample variants.
- *  - `preview.png`, `thumbnail.png`, `icon.png`
- *  - `textures/ground/` or `textures/water/` - these are large tileable
- *    background textures, not stamp-style map assets, and putting them
- *    on the map looks horrible
- *  - fonts/ - literal fonts
+ * Wonderdraft asset packs contain THREE variants per asset, with NO
+ * underscore between the base name and the variant suffix:
+ *   - farmhousenormal.png  <- the actual map asset (want!)
+ *   - farmhousesample.png  <- tiny thumbnail shown in UI (reject)
+ *   - farmhousecustom.png  <- placeholder/alternate (reject)
  *
- * Returns null if the path is OK to import, otherwise a reason string
- * so callers can log or display it.
+ * The user spotted this from an actual Wonderdraft file listing:
+ * `farmhousenormal.png`. The original blacklist was looking for
+ * `_sample` with an underscore and never matched anything, so all
+ * three variants were being imported and the map showed the sample
+ * thumbnails as coloured markers.
+ *
+ * Strategy: whitelist. Only accept image files that end with `normal`
+ * before the extension. Everything else is rejected with a reason
+ * so the UI can report "skipped: N samples, M custom, ...".
+ *
+ * Also reject explicit non-asset paths: fonts/, textures/, overlays/,
+ * preview/thumbnail/icon/logo standalone files.
  */
 export function shouldSkipPath(path: string): string | null {
     const lower = path.toLowerCase();
@@ -49,22 +54,29 @@ export function shouldSkipPath(path: string): string | null {
     // Non-image files
     if (!/\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'not an image';
 
-    // Wonderdraft internal variants - skip thumbnails and previews
-    if (/_sample\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'sample thumbnail';
-    if (/_custom\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'custom placeholder';
+    // Explicit standalone metadata images (pack preview screenshots etc.)
     if (/(?:^|\/)preview\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'preview';
     if (/(?:^|\/)thumbnail\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'thumbnail';
     if (/(?:^|\/)icon\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'icon';
     if (/(?:^|\/)logo\.(png|jpg|jpeg|webp)$/i.test(lower)) return 'logo';
 
-    // Background textures (tileable ground/water) - not stamp assets
+    // Background textures and overlays - tileable, not stamp-style
     if (lower.includes('/textures/ground/')) return 'background texture';
     if (lower.includes('/textures/water/')) return 'background texture';
     if (lower.includes('/textures/paper/')) return 'background texture';
     if (lower.includes('/overlays/')) return 'background overlay';
 
-    // Font folders (some packs include fonts even though they are TTF)
+    // Font folders
     if (lower.includes('/fonts/')) return 'font';
+
+    // Whitelist: only files whose basename ends with "normal" before the
+    // extension are the real Wonderdraft map assets.
+    // Matches: farmhousenormal.png, pine_normal.jpg, mountain01normal.webp
+    // Rejects: farmhousesample.png, farmhousecustom.png, anything else
+    const basename = lower.split('/').pop() ?? '';
+    if (!/normal\.(png|jpg|jpeg|webp)$/i.test(basename)) {
+        return 'not a normal variant';
+    }
 
     return null;
 }
