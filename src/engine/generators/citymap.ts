@@ -312,23 +312,98 @@ export class CityMapGenerator {
         }
     }
 
+    /**
+     * Determine a terrain biome for the city's surroundings based on the seed.
+     * Different biomes use different base colors, noise patterns and accents,
+     * so no two cities have the same landscape.
+     */
+    _getTerrainBiome(seed) {
+        // Pick one of 6 biomes deterministically from the seed.
+        // Use a different seed slice than the one used for the city shape so
+        // shape and biome are decoupled.
+        const biomes = ['plains', 'forest_edge', 'hills', 'coastal', 'marsh', 'steppe'];
+        const idx = Math.abs(Math.floor(seed * 0.00007)) % biomes.length;
+        return biomes[idx];
+    }
+
+    /**
+     * Per-biome background palette and noise settings. Each entry returns an
+     * RGB triplet given a noise value [0..1] and the (x,y) coordinates.
+     */
+    _biomeColor(biome, n, moisture) {
+        switch (biome) {
+            case 'plains':
+                // Lush green meadowland
+                return {
+                    r: 82 + n * 34,
+                    g: 128 + n * 38,
+                    b: 52 + n * 22,
+                };
+            case 'forest_edge':
+                // Dark mossy green with brown undergrowth
+                return {
+                    r: 55 + n * 25 + moisture * 15,
+                    g: 92 + n * 28,
+                    b: 40 + n * 18,
+                };
+            case 'hills':
+                // Golden-green rolling hills with dry grass accents
+                return {
+                    r: 130 + n * 45,
+                    g: 140 + n * 35,
+                    b: 65 + n * 20,
+                };
+            case 'coastal':
+                // Sandy dune-grass mix near the coast
+                return {
+                    r: 155 + n * 40,
+                    g: 150 + n * 30,
+                    b: 85 + n * 20,
+                };
+            case 'marsh':
+                // Olive-yellow wetland with darker water patches
+                return {
+                    r: 88 + n * 25 - moisture * 20,
+                    g: 105 + n * 25 - moisture * 10,
+                    b: 55 + n * 15 + moisture * 25,
+                };
+            case 'steppe':
+                // Dry pale-yellow grassland
+                return {
+                    r: 175 + n * 40,
+                    g: 160 + n * 35,
+                    b: 95 + n * 25,
+                };
+            default:
+                return { r: 95, g: 138, b: 62 };
+        }
+    }
+
     _renderBackground(ctx, cfg, noise) {
         const { width, height } = cfg;
+        const biome = this._getTerrainBiome(cfg.seed);
+        cfg._biome = biome; // stash for later passes (trees, features)
+
+        // Use two noise layers: large-scale variation for terrain and a
+        // separate moisture layer for ponds, patches, etc.
+        const noise2 = new SimplexNoise(cfg.seed + 4711);
         const imageData = ctx.createImageData(width, height);
         const data = imageData.data;
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                const n = (noise.fbm(x / 150, y / 150, 3) + 1) * 0.5;
+                // Larger scale than before for more visible terrain variation
+                const n = (noise.fbm(x / 220, y / 220, 4) + 1) * 0.5;
+                // Moisture / patch layer at a different frequency so it
+                // doesn't line up with the main noise
+                const m = (noise2.fbm(x / 110, y / 110, 3) + 1) * 0.5;
+
+                const color = this._biomeColor(biome, n, m);
+
                 const pi = (y * width + x) * 4;
-
-                const r = 70 + n * 40;
-                const g = 120 + n * 30;
-                const b = 50 + n * 20;
-
-                data[pi] = r;
-                data[pi + 1] = g;
-                data[pi + 2] = b;
+                data[pi]     = Math.max(0, Math.min(255, color.r));
+                data[pi + 1] = Math.max(0, Math.min(255, color.g));
+                data[pi + 2] = Math.max(0, Math.min(255, color.b));
                 data[pi + 3] = 255;
             }
         }
@@ -1193,18 +1268,61 @@ export class CityMapGenerator {
         }
     }
 
+    /**
+     * Scatter vegetation outside the city walls, biased by the biome
+     * from Package E. Trees form small clumps via a secondary noise
+     * field so we get actual "woods" instead of evenly-spread dots.
+     */
     _renderSurroundingTrees(ctx, cfg, centerX, centerY, cityRadius, rng) {
         const { width, height } = cfg;
         const margin = 30;
+        const biome = cfg._biome || 'plains';
 
-        for (let i = 0; i < 200; i++) {
+        // Per-biome vegetation budget and mix
+        const biomeConfig: Record<string, { density: number; pineMix: number }> = {
+            plains:       { density: 160, pineMix: 0.25 },
+            forest_edge:  { density: 520, pineMix: 0.55 },
+            hills:        { density: 110, pineMix: 0.35 },
+            coastal:      { density: 90,  pineMix: 0.15 },
+            marsh:        { density: 70,  pineMix: 0.10 },
+            steppe:       { density: 40,  pineMix: 0.05 },
+        };
+        const conf = biomeConfig[biome] || biomeConfig.plains;
+
+        // Clump field: a low-frequency noise layer that determines
+        // where trees are allowed to grow. High noise = small forest.
+        const clumpNoise = new SimplexNoise(cfg.seed + 9000);
+
+        let attempts = 0;
+        let placed = 0;
+        const target = conf.density;
+        while (placed < target && attempts < target * 6) {
+            attempts++;
             const x = rng.nextFloat(margin, width - margin);
             const y = rng.nextFloat(margin, height - margin);
 
+            // Keep trees out of the city
             if (distance(x, y, centerX, centerY) < cityRadius * 1.15) continue;
 
-            const type = rng.next() > 0.5 ? 'pine' : 'deciduous';
-            drawTree(ctx, x, y, rng.nextFloat(6, 10), { type });
+            // Clump mask: normalized 0..1
+            const clump = (clumpNoise.fbm(x / 120, y / 120, 3) + 1) * 0.5;
+
+            // Biome-specific clump threshold
+            let threshold;
+            switch (biome) {
+                case 'forest_edge': threshold = 0.30; break;  // mostly wooded
+                case 'hills':       threshold = 0.52; break;  // sparse clumps
+                case 'marsh':       threshold = 0.60; break;  // rare trees
+                case 'steppe':      threshold = 0.75; break;  // very rare
+                case 'coastal':     threshold = 0.55; break;
+                default:            threshold = 0.45; break;  // plains
+            }
+            if (clump < threshold) continue;
+
+            const type = rng.next() < conf.pineMix ? 'pine' : 'deciduous';
+            const size = rng.nextFloat(6, 11);
+            drawTree(ctx, x, y, size, { type });
+            placed++;
         }
     }
 
