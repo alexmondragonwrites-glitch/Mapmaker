@@ -1141,6 +1141,61 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* ── Placement panel (F1c) ──────────────────────────────────────── */
+
+/* Canvas cursor when place-mode is active */
+.place-mode-cursor {
+    cursor: crosshair !important;
+}
+
+.placement-hint {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-style: italic;
+}
+
+.placement-hint.active {
+    color: var(--accent);
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* Save/load button row used by PlacementPanel map save section */
+.lore-action-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.lore-action-row .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+/* PlacementPanel form inputs: full-width, match the generator panel */
+.placement-input {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 0.85em;
+}
+
+.placement-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+input.placement-input[type="range"] {
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
 /* Skip-reason breakdown (collapsible after import) */
 
 .asset-skip-breakdown {

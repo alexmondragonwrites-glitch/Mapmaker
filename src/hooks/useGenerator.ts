@@ -2,6 +2,17 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { GeneratorRegistry, WorldMapGenerator, CityMapGenerator, BattleMapGenerator } from '../engine';
 import type { GeneratorEntry, GeneratorConfig } from '../engine';
 
+/**
+ * Optional post-generate hook. Runs after the procedural generator
+ * finishes but before the status is set to "done", so overlays like
+ * placed assets can draw on top of the base map.
+ */
+export type AfterGenerateHook = (
+    canvas: HTMLCanvasElement,
+    generatorId: string,
+    config: GeneratorConfig,
+) => void;
+
 export function useGenerator() {
   const registryRef = useRef<GeneratorRegistry | null>(null);
   const [activeGenerator, setActiveGenerator] = useState<GeneratorEntry | null>(null);
@@ -9,6 +20,14 @@ export function useGenerator() {
   const [generators, setGenerators] = useState<GeneratorEntry[]>([]);
   const [status, setStatus] = useState('Bereit');
   const [isGenerating, setIsGenerating] = useState(false);
+  // Hook that runs after the procedural generator finishes. Held in
+  // a ref so updating the hook from the caller doesn't invalidate
+  // the memoized `generate` callback (which would retrigger the
+  // debounced render effect on every hook update).
+  const afterHookRef = useRef<AfterGenerateHook | null>(null);
+  const setAfterGenerate = useCallback((hook: AfterGenerateHook | null) => {
+    afterHookRef.current = hook;
+  }, []);
 
   // Initialize registry once
   useEffect(() => {
@@ -44,6 +63,13 @@ export function useGenerator() {
     requestAnimationFrame(() => {
       try {
         activeGenerator.instance.generate(canvas, config);
+        // Post-generate overlay (manual placed assets). Any error
+        // here is logged but doesn't roll back the base render.
+        try {
+          afterHookRef.current?.(canvas, activeGenerator.id, config);
+        } catch (hookErr) {
+          console.error('afterGenerate hook failed:', hookErr);
+        }
         setStatus(`${activeGenerator.label} generiert (${canvas.width}×${canvas.height}px)`);
       } catch (err: any) {
         setStatus(`Fehler: ${err.message}`);
@@ -72,5 +98,6 @@ export function useGenerator() {
     generate,
     randomize,
     updateConfig,
+    setAfterGenerate,
   };
 }

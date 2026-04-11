@@ -296,3 +296,31 @@ export function drawWindmillSmart(ctx: Ctx, x: number, y: number, size: number, 
     if (tryDrawAsset(ctx, 'windmill', x, y, size, seed)) return;
     drawWindmill(ctx, x, y, size);
 }
+
+/**
+ * Draw one *specific* loaded asset (looked up by its record id) at
+ * (x, y) with the per-category scale and anchor. Used by the manual
+ * placement overlay so the user can pin an exact variant. Falls
+ * back to the category picker if the id isn't in the current cache
+ * (e.g. pack was disabled after the placement was saved). Returns
+ * true if something was drawn.
+ */
+export function drawAssetById(
+    ctx: Ctx,
+    id: string,
+    category: AssetCategory,
+    x: number,
+    y: number,
+    size: number,
+    fallbackSeed: number,
+): boolean {
+    const store = getStoreCached();
+    const loaded = store.pickAssetById(id);
+    if (loaded) {
+        drawLoadedAsset(ctx, loaded, x, y, size, category);
+        return true;
+    }
+    // Fallback: either the variant was disabled or the pack was
+    // removed. Fall back to a random variant from the same category.
+    return tryDrawAsset(ctx, category, x, y, size, fallbackSeed);
+}

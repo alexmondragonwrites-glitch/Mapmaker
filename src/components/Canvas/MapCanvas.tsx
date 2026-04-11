@@ -6,6 +6,15 @@ interface MapCanvasProps {
     height?: number;
     /** Called when the user changes zoom/pan so the StatusBar can display it. */
     onViewChange?: (view: { zoom: number; panX: number; panY: number }) => void;
+    /**
+     * Called when the user clicks (pointer down + up without a drag)
+     * on the canvas. Receives the click position in normalized
+     * canvas coordinates (nx/ny in [0,1]). The manual-placement
+     * tool uses this to drop assets onto the map.
+     */
+    onCanvasClick?: (nx: number, ny: number) => void;
+    /** Extra CSS class for the canvas (e.g. cursor when place-mode is active). */
+    canvasClassName?: string;
 }
 
 export interface MapCanvasHandle {
@@ -17,7 +26,7 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 
 export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
-    { onCanvasReady, width = 1200, height = 800, onViewChange },
+    { onCanvasReady, width = 1200, height = 800, onViewChange, onCanvasClick, canvasClassName },
     ref,
 ) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,6 +40,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     // Drag state tracked in refs so rerenders don't reset mid-drag
     const dragStateRef = useRef<{
         dragging: boolean;
+        moved: boolean;
         startX: number;
         startY: number;
         startPanX: number;
@@ -100,6 +110,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
 
         dragStateRef.current = {
             dragging: true,
+            moved: false,
             startX: e.clientX,
             startY: e.clientY,
             startPanX: panX,
@@ -115,9 +126,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
 
         const dx = e.clientX - state.startX;
         const dy = e.clientY - state.startY;
-        // Only start dragging after a small threshold so tiny clicks still
+        // Only start panning after a small threshold so tiny clicks still
         // pass through to the canvas click handlers
         if (Math.hypot(dx, dy) < 3) return;
+        state.moved = true;
 
         setPanX(state.startPanX + dx);
         setPanY(state.startPanY + dy);
@@ -129,8 +141,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         try {
             (e.currentTarget as HTMLElement).releasePointerCapture(state.pointerId);
         } catch { /* ignore */ }
+
+        // Clean click (no drag) - fire onCanvasClick with normalized
+        // canvas coordinates. We convert client -> wrapper -> world
+        // accounting for the current pan/zoom CSS transform.
+        if (!state.moved && onCanvasClick && canvasRef.current && wrapperRef.current) {
+            const rect = wrapperRef.current.getBoundingClientRect();
+            const cx = e.clientX - rect.left;
+            const cy = e.clientY - rect.top;
+            // Undo CSS transform: translate(pan, pan) scale(zoom)
+            // around transform-origin = center
+            const worldX = (cx - panX - rect.width / 2) / zoom + width / 2;
+            const worldY = (cy - panY - rect.height / 2) / zoom + height / 2;
+            const nx = worldX / width;
+            const ny = worldY / height;
+            // Ignore clicks outside the canvas bounds
+            if (nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1) {
+                onCanvasClick(nx, ny);
+            }
+        }
+
         dragStateRef.current = null;
-    }, []);
+    }, [onCanvasClick, panX, panY, zoom, width, height]);
 
     // ── Double click to reset ───────────────────────────────────────
 
@@ -195,6 +227,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             <canvas
                 ref={canvasRef}
                 id="map-canvas"
+                className={canvasClassName}
                 width={width}
                 height={height}
                 style={{

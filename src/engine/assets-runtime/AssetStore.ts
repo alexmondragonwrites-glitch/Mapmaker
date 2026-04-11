@@ -321,6 +321,21 @@ export class AssetStore {
         return list[idx];
     }
 
+    /**
+     * Look up a specific loaded asset by its record id. Used by the
+     * manual placement overlay so the user can pin a *specific*
+     * variant rather than a random one. Returns null if the id
+     * doesn't appear in the current cache (e.g. pack disabled).
+     */
+    pickAssetById(id: string): LoadedAsset | null {
+        for (const list of this.cache.values()) {
+            for (const loaded of list) {
+                if (loaded.record.id === id) return loaded;
+            }
+        }
+        return null;
+    }
+
     /** Check whether we have any assets for a category. */
     hasCategory(category: AssetCategory): boolean {
         const list = this.cache.get(category);

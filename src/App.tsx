@@ -5,11 +5,14 @@ import { StatusBar } from './components/StatusBar';
 import { useGenerator } from './hooks/useGenerator';
 import { useLore } from './hooks/useLore';
 import { useAssets } from './hooks/useAssets';
+import { usePlacedAssets, type PlacedAsset } from './hooks/usePlacedAssets';
 import { useZoom } from './hooks/useZoom';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { setWorldMapZoom } from './engine/generators/worldmap';
+import { renderPlacedAssets } from './engine/placed-assets';
 import { exportCanvasAsPNG } from './utils';
 import type { ActivePanel } from './components/Sidebar/TabBar';
+import type { PlaceMode } from './components/Sidebar/PlacementPanel';
 
 export default function App() {
   const {
@@ -22,7 +25,16 @@ export default function App() {
     generate,
     randomize,
     updateConfig,
+    setAfterGenerate,
   } = useGenerator();
+
+  const {
+    placements: placedAssets,
+    add: addPlacedAsset,
+    remove: removePlacedAsset,
+    clearForMap: clearPlacedAssetsForMap,
+    forMap: placedAssetsForMap,
+  } = usePlacedAssets();
 
   const {
     lore,
@@ -52,6 +64,14 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mapCanvasRef = useRef<MapCanvasHandle | null>(null);
 
+  // Manual place-mode state. Starts inactive with a sensible default.
+  const [placeMode, setPlaceMode] = useState<PlaceMode>({
+    active: false,
+    category: 'tree',
+    variantId: null,
+    size: 14,
+  });
+
   // Current view state (zoom/pan) reported from MapCanvas so we can
   // show it in the StatusBar and wire up the reset button
   const [view, setView] = useState({ zoom: 1, panX: 0, panY: 0 });
@@ -64,6 +84,36 @@ export default function App() {
   useEffect(() => {
     setWorldMapZoom(zoom.controller);
   }, [zoom.controller]);
+
+  // Register the placed-assets overlay as the generator's after-hook.
+  // Reads from the *latest* placements via a ref-like closure so the
+  // hook doesn't need to be re-registered on every placement change.
+  const placedAssetsRef = useRef(placedAssets);
+  useEffect(() => { placedAssetsRef.current = placedAssets; }, [placedAssets]);
+  useEffect(() => {
+    setAfterGenerate((canvas, generatorId, cfg) => {
+      const seed = typeof cfg.seed === 'number' ? cfg.seed : 0;
+      const list = placedAssetsRef.current.filter(
+        p => p.generatorId === generatorId && p.mapSeed === seed,
+      );
+      renderPlacedAssets(canvas, list);
+    });
+    return () => setAfterGenerate(null);
+  }, [setAfterGenerate]);
+
+  // Re-render whenever placements change (add/remove) so the overlay
+  // updates immediately. Skip the first mount - the canvas-ready
+  // effect already does the initial render.
+  const firstPlacementSync = useRef(true);
+  useEffect(() => {
+    if (firstPlacementSync.current) {
+      firstPlacementSync.current = false;
+      return;
+    }
+    if (canvasRef.current && activeGenerator) {
+      generate(canvasRef.current);
+    }
+  }, [placedAssets, activeGenerator, generate]);
 
   // When the zoom level changes to 'city', auto-switch to the city
   // generator using the clicked city's data. Going back to 'world'
@@ -195,6 +245,104 @@ export default function App() {
     if (canvasRef.current) generate(canvasRef.current);
   }, [toggleAssetVariant, generate]);
 
+  // ── Manual placement ────────────────────────────────────────────
+
+  // Derived: placements belonging to the currently-active map.
+  const currentSeed = typeof config.seed === 'number' ? config.seed : 0;
+  const currentMapPlacements = useMemo(
+    () => (activeGenerator ? placedAssetsForMap(activeGenerator.id, currentSeed) : []),
+    [activeGenerator, currentSeed, placedAssetsForMap],
+  );
+
+  // Canvas click handler: only active in place mode. Adds a new
+  // placement at the clicked spot using the current placeMode brush.
+  const handleCanvasClick = useCallback((nx: number, ny: number) => {
+    if (!placeMode.active || !activeGenerator) return;
+    addPlacedAsset({
+      generatorId: activeGenerator.id,
+      mapSeed: currentSeed,
+      category: placeMode.category,
+      variantId: placeMode.variantId ?? undefined,
+      nx,
+      ny,
+      size: placeMode.size,
+    });
+  }, [placeMode, activeGenerator, currentSeed, addPlacedAsset]);
+
+  const handleClearMapPlacements = useCallback(() => {
+    if (!activeGenerator) return;
+    clearPlacedAssetsForMap(activeGenerator.id, currentSeed);
+  }, [activeGenerator, currentSeed, clearPlacedAssetsForMap]);
+
+  // ── Map save / load (F1d) ───────────────────────────────────────
+
+  const handleSaveMap = useCallback(() => {
+    if (!activeGenerator) return;
+    const payload = {
+      version: 1 as const,
+      savedAt: new Date().toISOString(),
+      generatorId: activeGenerator.id,
+      generatorLabel: activeGenerator.label,
+      config,
+      placedAssets: currentMapPlacements,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calyndra-${activeGenerator.id}-seed${currentSeed}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [activeGenerator, config, currentSeed, currentMapPlacements]);
+
+  const handleLoadMap = useCallback(async (file: File): Promise<{ success: boolean; message: string }> => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as {
+        version?: number;
+        generatorId?: string;
+        config?: Record<string, unknown>;
+        placedAssets?: PlacedAsset[];
+      };
+      if (parsed.version !== 1 || !parsed.generatorId || !parsed.config) {
+        return { success: false, message: 'Ungültiges Karten-Format.' };
+      }
+      // Switch to the saved generator if needed
+      if (activeGenerator?.id !== parsed.generatorId) {
+        const target = generators.find(g => g.id === parsed.generatorId);
+        if (target) switchGenerator(parsed.generatorId);
+      }
+      // Apply saved config one key at a time so we hit the debounced
+      // regen exactly once (React batches these within the same tick)
+      for (const [k, v] of Object.entries(parsed.config)) {
+        updateConfig(k, v);
+      }
+      // Replace this map's placements. Strip stale ids by re-adding,
+      // but keep the same (generatorId, mapSeed) so they attach to
+      // the freshly-loaded map.
+      if (Array.isArray(parsed.placedAssets)) {
+        const seed = typeof parsed.config.seed === 'number' ? parsed.config.seed : 0;
+        const gid = parsed.generatorId;
+        // First clear any existing placements for this map, then add loaded ones
+        clearPlacedAssetsForMap(gid, seed);
+        for (const p of parsed.placedAssets) {
+          addPlacedAsset({
+            generatorId: gid,
+            mapSeed: seed,
+            category: p.category,
+            variantId: p.variantId,
+            nx: p.nx,
+            ny: p.ny,
+            size: p.size,
+          });
+        }
+      }
+      return { success: true, message: `Karte geladen (${parsed.placedAssets?.length ?? 0} Platzierungen).` };
+    } catch (err: any) {
+      return { success: false, message: `Fehler: ${err.message}` };
+    }
+  }, [activeGenerator, generators, switchGenerator, updateConfig, clearPlacedAssetsForMap, addPlacedAsset]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -213,9 +361,13 @@ export default function App() {
           if (e.ctrlKey) { e.preventDefault(); handleExport(); }
           break;
         case 'Escape':
-          // Zoom out one level (city -> region -> world). Works only
-          // if the user is currently zoomed in.
-          if (zoom.isZoomed) {
+          // Escape priority: first leave place-mode, then zoom out.
+          // Place-mode feels like a modal tool, so getting out of it
+          // with ESC is more important than one-level zoom-out.
+          if (placeMode.active) {
+            e.preventDefault();
+            setPlaceMode(m => ({ ...m, active: false }));
+          } else if (zoom.isZoomed) {
             e.preventDefault();
             zoom.zoomOut();
           }
@@ -232,7 +384,7 @@ export default function App() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [handleRandomize, handleGenerate, handleExport, zoom]);
+  }, [handleRandomize, handleGenerate, handleExport, zoom, placeMode.active]);
 
   return (
     <div className="app-layout">
@@ -265,6 +417,14 @@ export default function App() {
         onAssetsDeletePack={handleAssetsDelete}
         onAssetsListVariants={listAssetVariants}
         onAssetsToggleVariant={handleAssetsToggleVariant}
+        placedAssetsForMap={currentMapPlacements}
+        placeMode={placeMode}
+        onPlaceModeChange={setPlaceMode}
+        onRemovePlacement={removePlacedAsset}
+        onClearMapPlacements={handleClearMapPlacements}
+        onSaveMap={handleSaveMap}
+        onLoadMap={handleLoadMap}
+        onSelectPlace={() => setActivePanel('place')}
       />
 
       <main className="main-content">
@@ -274,6 +434,8 @@ export default function App() {
           width={config.width as number}
           height={config.height as number}
           onViewChange={handleViewChange}
+          onCanvasClick={handleCanvasClick}
+          canvasClassName={placeMode.active ? 'place-mode-cursor' : undefined}
         />
         <StatusBar
           status={status}

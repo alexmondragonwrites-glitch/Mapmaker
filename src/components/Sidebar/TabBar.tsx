@@ -1,6 +1,6 @@
 import type { GeneratorEntry } from '../../engine/types';
 
-export type ActivePanel = 'generator' | 'lore' | 'assets';
+export type ActivePanel = 'generator' | 'lore' | 'assets' | 'place';
 
 interface TabBarProps {
   generators: GeneratorEntry[];
@@ -9,6 +9,7 @@ interface TabBarProps {
   onSelectGenerator: (id: string) => void;
   onSelectLore: () => void;
   onSelectAssets: () => void;
+  onSelectPlace: () => void;
 }
 
 // Short labels so all tabs fit in a 320px sidebar without wrapping weirdly
@@ -25,6 +26,7 @@ export function TabBar({
   onSelectGenerator,
   onSelectLore,
   onSelectAssets,
+  onSelectPlace,
 }: TabBarProps) {
   return (
     <nav className="tab-bar">
@@ -59,6 +61,14 @@ export function TabBar({
         >
           <span className="tab-icon">📦</span>
           <span className="tab-label">Assets</span>
+        </button>
+        <button
+          className={`tab-btn ${activePanel === 'place' ? 'active' : ''}`}
+          onClick={onSelectPlace}
+          title="Assets platzieren & Karte speichern"
+        >
+          <span className="tab-icon">🎯</span>
+          <span className="tab-label">Platzieren</span>
         </button>
       </div>
     </nav>
