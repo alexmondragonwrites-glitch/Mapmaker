@@ -11,7 +11,7 @@ import {
     drawForge, drawChurch, drawGuildHall, drawWarehouse,
     drawWell, drawFountain, drawMarketStall, drawWindmill,
     drawStatue, drawBarracks, drawLibrary, drawDock,
-    drawShack, drawNobleHouse, drawShrine,
+    drawShack, drawNobleHouse, drawShrine, drawBridge,
 } from '../assets';
 
 // ── District Building Mix Definitions ───────────────────────────────
@@ -264,6 +264,11 @@ export class CityMapGenerator {
         // Roads (radial + ring)
         const roads = this._generateRoads(cfg, centerX, centerY, cityRadius, rng, districts);
         this._renderRoads(ctx, cfg, roads);
+
+        // Bridges where roads cross the river
+        if (cfg.hasRiver && riverPoints.length > 0) {
+            this._renderBridges(ctx, roads, riverPoints);
+        }
 
         // Buildings per district
         this._renderBuildings(ctx, cfg, districts, roads, riverPoints, centerX, centerY, cityRadius, rng, noise);
@@ -567,6 +572,48 @@ export class CityMapGenerator {
         }
 
         ctx.restore();
+    }
+
+    _renderBridges(ctx, roads, riverPoints) {
+        // Find points where roads cross the river and drop a bridge there.
+        // We sample the river as a polyline and check each road segment.
+        const bridgeThreshold = 8;    // how close a road point must be to a river point
+        const minBridgeSpacing = 40;  // don't place two bridges closer than this
+
+        const placedBridges: Array<{ x: number; y: number }> = [];
+
+        for (const road of roads) {
+            for (let i = 0; i < road.points.length - 1; i++) {
+                const a = road.points[i];
+                const b = road.points[i + 1];
+
+                // Check the midpoint of each road segment against the river
+                const mx = (a.x + b.x) / 2;
+                const my = (a.y + b.y) / 2;
+
+                for (const rp of riverPoints) {
+                    const d = Math.hypot(mx - rp.x, my - rp.y);
+                    if (d >= bridgeThreshold) continue;
+
+                    // Too close to an existing bridge?
+                    let tooClose = false;
+                    for (const bridge of placedBridges) {
+                        if (Math.hypot(mx - bridge.x, my - bridge.y) < minBridgeSpacing) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    if (tooClose) break;
+
+                    // Bridge orientation: follow the road direction so the
+                    // bridge sits lengthwise across the river.
+                    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+                    drawBridge(ctx, rp.x, rp.y, 22, angle);
+                    placedBridges.push({ x: rp.x, y: rp.y });
+                    break;
+                }
+            }
+        }
     }
 
     _renderBuildings(ctx, cfg, districts, roads, riverPoints, centerX, centerY, cityRadius, rng, noise) {
