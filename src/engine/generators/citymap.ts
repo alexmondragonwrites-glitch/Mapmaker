@@ -240,6 +240,11 @@ export class CityMapGenerator {
         const centerX = cfg.width / 2;
         const centerY = cfg.height / 2;
 
+        // Generate organic city outline (noise-deformed polygon).
+        // This replaces the old "perfect circle with tiny wobble" approach.
+        // The outline is used for walls, district containment, and gate placement.
+        const outline = this._generateCityOutline(centerX, centerY, cityRadius, cfg.seed, noise);
+
         // Background - grass/terrain
         this._renderBackground(ctx, cfg, noise);
 
@@ -256,9 +261,9 @@ export class CityMapGenerator {
         // District ground tinting (under walls and roads)
         this._renderDistrictGrounds(ctx, districts);
 
-        // City walls
+        // City walls (follow the organic outline)
         if (cfg.hasWalls) {
-            this._renderWalls(ctx, cfg, centerX, centerY, cityRadius, rng, noise);
+            this._renderWalls(ctx, cfg, outline, rng);
         }
 
         // Roads (radial + ring)
@@ -444,21 +449,98 @@ export class CityMapGenerator {
         ctx.restore();
     }
 
-    _renderWalls(ctx, cfg, centerX, centerY, radius, rng, noise) {
-        ctx.save();
+    /**
+     * Generate an organic city outline: a noise-deformed polygon centered
+     * on (cx, cy) with a base radius of `baseRadius`. The deformation
+     * combines several noise octaves plus a random directional stretch
+     * so no two cities look the same and none of them look like a circle.
+     *
+     * Returns an object with:
+     *  - points[]: the polygon vertices
+     *  - cx, cy, baseRadius, avgRadius, maxRadius: bookkeeping
+     *  - containsPoint(x, y): predicate to check if a point is inside
+     *  - radiusAt(angle): the outline radius at a given angle
+     */
+    _generateCityOutline(cx, cy, baseRadius, seed, noise) {
+        // Directional stretch: pick a preferred "growth axis" so cities are
+        // elongated rather than perfectly round. Offsets come from the seed
+        // so the same seed always produces the same city shape.
+        const stretchAngle = ((seed * 0.0001) % 1) * Math.PI * 2;
+        const stretchAmount = 0.15 + ((seed * 0.00013) % 1) * 0.25;  // 15-40%
 
-        // Wall path (irregular circle)
-        const wallPoints = [];
-        const segments = 60;
-        for (let i = 0; i <= segments; i++) {
+        // Asymmetric blob radius: bigger in one half, smaller in the other
+        const lobeAngle = stretchAngle + Math.PI * 0.5;
+        const lobeStrength = 0.08 + ((seed * 0.00017) % 1) * 0.14;   // 8-22%
+
+        // Number of outline samples - more = smoother
+        const segments = 96;
+        const points: Array<{ x: number; y: number; angle: number; r: number }> = [];
+
+        // Precompute the radius function so we can reuse it
+        const radiusAt = (angle: number) => {
+            // Normalized direction vector for noise sampling
+            const dx = Math.cos(angle);
+            const dy = Math.sin(angle);
+
+            // Multi-octave noise around the center of the city
+            const n1 = noise.noise2D(dx * 1.3, dy * 1.3);          // large lobes
+            const n2 = noise.noise2D(dx * 3.1 + 50, dy * 3.1 + 50); // medium bumps
+            const n3 = noise.noise2D(dx * 6.2 + 99, dy * 6.2 + 99); // small bulges
+            const combined = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+
+            // Directional stretch: project angle onto the stretch axis
+            const stretchDot = Math.cos(angle - stretchAngle);
+            const stretchMul = 1 + stretchDot * stretchDot * stretchAmount;
+
+            // Extra lobe in one direction
+            const lobeDot = Math.max(0, Math.cos(angle - lobeAngle));
+            const lobeMul = 1 + lobeDot * lobeStrength;
+
+            // Combined deformation: ±35% from noise plus the axis stretching
+            const deform = (1 + combined * 0.35) * stretchMul * lobeMul;
+            return baseRadius * deform;
+        };
+
+        for (let i = 0; i < segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
-            const wobble = noise.noise2D(Math.cos(angle) * 2, Math.sin(angle) * 2) * radius * 0.08;
-            const r = radius + wobble;
-            wallPoints.push({
-                x: centerX + Math.cos(angle) * r,
-                y: centerY + Math.sin(angle) * r,
+            const r = radiusAt(angle);
+            points.push({
+                x: cx + Math.cos(angle) * r,
+                y: cy + Math.sin(angle) * r,
+                angle,
+                r,
             });
         }
+
+        // Also compute avgRadius / maxRadius for use by other methods
+        let sumR = 0;
+        let maxR = 0;
+        for (const p of points) {
+            sumR += p.r;
+            if (p.r > maxR) maxR = p.r;
+        }
+        const avgRadius = sumR / points.length;
+
+        return {
+            points,
+            cx,
+            cy,
+            baseRadius,
+            avgRadius,
+            maxRadius: maxR,
+            radiusAt,
+            containsPoint(x: number, y: number, margin = 0) {
+                const angle = Math.atan2(y - cy, x - cx);
+                const d = Math.hypot(x - cx, y - cy);
+                return d <= radiusAt(angle) - margin;
+            },
+        };
+    }
+
+    _renderWalls(ctx, cfg, outline, rng) {
+        ctx.save();
+
+        const wallPoints = outline.points;
 
         // Wall shadow
         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
@@ -475,28 +557,25 @@ export class CityMapGenerator {
         ctx.lineWidth = 3;
         this._drawPath(ctx, wallPoints);
 
-        // Towers along walls
-        const towerInterval = Math.floor(segments / 8);
-        for (let i = 0; i < segments; i += towerInterval) {
-            const pt = wallPoints[i];
-            drawTower(ctx, pt.x, pt.y, 14);
+        // Towers every ~8 segments along the outline
+        const towerCount = 8;
+        const towerStep = Math.floor(wallPoints.length / towerCount);
+        for (let i = 0; i < wallPoints.length; i += towerStep) {
+            drawTower(ctx, wallPoints[i].x, wallPoints[i].y, 14);
         }
 
-        // Gate (south)
-        const gateIdx = Math.floor(segments * 0.5);
-        const gate = wallPoints[gateIdx];
-        ctx.fillStyle = PALETTES.city.wall;
-        ctx.fillRect(gate.x - 8, gate.y - 4, 16, 8);
-        ctx.fillStyle = '#3a2a1a';
-        ctx.fillRect(gate.x - 4, gate.y - 3, 8, 6);
-
-        // North gate
-        const northGateIdx = 0;
-        const northGate = wallPoints[northGateIdx];
-        ctx.fillStyle = PALETTES.city.wall;
-        ctx.fillRect(northGate.x - 8, northGate.y - 4, 16, 8);
-        ctx.fillStyle = '#3a2a1a';
-        ctx.fillRect(northGate.x - 4, northGate.y - 3, 8, 6);
+        // Gates: pick 2-3 roughly opposite points on the outline.
+        // We pick them at fixed fractions of the ring so the road system
+        // can find them later without re-computing.
+        const gateFractions = [0.0, 0.5];  // "north" and "south" equivalents on the deformed outline
+        for (const f of gateFractions) {
+            const idx = Math.floor(f * wallPoints.length);
+            const gate = wallPoints[idx];
+            ctx.fillStyle = PALETTES.city.wall;
+            ctx.fillRect(gate.x - 8, gate.y - 4, 16, 8);
+            ctx.fillStyle = '#3a2a1a';
+            ctx.fillRect(gate.x - 4, gate.y - 3, 8, 6);
+        }
 
         ctx.restore();
     }
