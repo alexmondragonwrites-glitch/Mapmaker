@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  # Run on pushes to main and the current working branch
+  push:
+    branches:
+      - main
+      - claude/fantasy-map-generator-XyEub
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+
+# Permissions required for actions/deploy-pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one concurrent deployment; skip intermediate runs but let the
+# current one finish so we don't leave Pages in a broken state.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          # Vite's base path for GitHub Pages: https://<user>.github.io/mapmaker/
+          VITE_BASE: /mapmaker/
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
