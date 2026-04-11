@@ -986,3 +986,47 @@ body {
     justify-content: flex-start !important;
 }
 
+/* Skip-reason breakdown (collapsible after import) */
+
+.asset-skip-breakdown {
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+}
+
+.asset-skip-breakdown summary {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: bold;
+    user-select: none;
+}
+
+.asset-skip-breakdown summary:hover {
+    color: var(--accent);
+}
+
+.asset-skip-breakdown ul {
+    list-style: none;
+    padding: 6px 0 0 0;
+    margin: 0;
+}
+
+.asset-skip-breakdown li {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.asset-skip-reason {
+    font-family: monospace;
+}
+
+.asset-skip-count {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+

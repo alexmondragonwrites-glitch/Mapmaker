@@ -25,6 +25,7 @@ interface SidebarProps {
   assetsLoading: boolean;
   assetsError: string | null;
   lastAssetImportMessage: string | null;
+  lastAssetSkipCounts: Record<string, number> | null;
   onAssetsImport: (files: File[]) => Promise<void>;
   onAssetsTogglePack: (id: string, enabled: boolean) => Promise<void>;
   onAssetsDeletePack: (id: string) => Promise<void>;
@@ -81,6 +82,7 @@ export function Sidebar(props: SidebarProps) {
             loading={props.assetsLoading}
             error={props.assetsError}
             lastImportMessage={props.lastAssetImportMessage}
+            lastSkipCounts={props.lastAssetSkipCounts}
             onImport={props.onAssetsImport}
             onTogglePack={props.onAssetsTogglePack}
             onDeletePack={props.onAssetsDeletePack}

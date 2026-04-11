@@ -46,6 +46,7 @@ interface AssetPanelProps {
     loading: boolean;
     error: string | null;
     lastImportMessage: string | null;
+    lastSkipCounts: Record<string, number> | null;
     onImport: (files: File[]) => Promise<void>;
     onTogglePack: (id: string, enabled: boolean) => Promise<void>;
     onDeletePack: (id: string) => Promise<void>;
@@ -57,6 +58,7 @@ export function AssetPanel({
     loading,
     error,
     lastImportMessage,
+    lastSkipCounts,
     onImport,
     onTogglePack,
     onDeletePack,
@@ -137,6 +139,21 @@ export function AssetPanel({
                 {error && <div className="lore-status error">{error}</div>}
                 {lastImportMessage && !error && (
                     <div className="lore-status success">{lastImportMessage}</div>
+                )}
+                {lastSkipCounts && Object.keys(lastSkipCounts).length > 0 && (
+                    <details className="asset-skip-breakdown">
+                        <summary>Uebersprungen nach Grund</summary>
+                        <ul>
+                            {Object.entries(lastSkipCounts)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([reason, count]) => (
+                                    <li key={reason}>
+                                        <span className="asset-skip-reason">{reason}</span>
+                                        <span className="asset-skip-count">{count}</span>
+                                    </li>
+                                ))}
+                        </ul>
+                    </details>
                 )}
             </section>
 

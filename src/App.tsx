@@ -52,6 +52,12 @@ export default function App() {
     return skipped > 0 ? `${base} (${skipped} uebersprungen)` : base;
   }, [lastAssetImport]);
 
+  // Skip counts for the diagnostic breakdown
+  const lastAssetSkipCounts = useMemo(
+    () => lastAssetImport?.skipCounts ?? null,
+    [lastAssetImport],
+  );
+
   // Generate when canvas is ready or config changes
   const handleCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
     canvasRef.current = canvas;
@@ -153,6 +159,7 @@ export default function App() {
         assetsLoading={assetsLoading}
         assetsError={assetsError}
         lastAssetImportMessage={lastAssetImportMessage}
+        lastAssetSkipCounts={lastAssetSkipCounts}
         onSelectGenerator={handleSelectGenerator}
         onSelectLore={() => setActivePanel('lore')}
         onSelectAssets={() => setActivePanel('assets')}
