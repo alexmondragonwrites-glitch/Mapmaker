@@ -216,11 +216,15 @@ export class AssetStore {
 
         // Load every asset from enabled packs, group by category
         const categories: AssetCategory[] = [
-            'mountain', 'hill', 'tree', 'pine', 'forest',
+            'mountain', 'hill', 'plateau', 'volcano',
+            'tree', 'pine', 'forest', 'field',
             'house', 'house_human', 'house_elven', 'house_dwarven',
-            'castle', 'tower', 'temple', 'church', 'shrine',
-            'tavern', 'forge', 'windmill', 'volcano',
-            'river', 'bridge', 'compass', 'border', 'cartouche', 'decoration',
+            'hut', 'camp', 'village', 'city',
+            'castle', 'fortress', 'tower', 'lighthouse',
+            'temple', 'church', 'shrine',
+            'tavern', 'forge', 'windmill', 'school',
+            'river', 'bridge', 'ship', 'airship',
+            'ruins', 'compass', 'border', 'cartouche', 'decoration',
         ];
 
         for (const cat of categories) {
