@@ -40,6 +40,12 @@ import {
     renderMountainRidges,
     renderBookMountainRidges,
 } from './worldmap/features/mountains';
+import {
+    renderForestGrid,
+    renderBookForestGrid,
+    renderNaturalForests,
+    renderBookNaturalForests,
+} from './worldmap/features/forests';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -243,9 +249,9 @@ export class WorldMapGenerator {
         // which goes through drawTreeSmart), so we still call it but the
         // procedural fallback icons would show through on missing assets.
         if (isBook) {
-            this._renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
+            renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         } else {
-            this._renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
+            renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         }
 
         // Generate and render mountains along ridges (not random grid)
@@ -450,38 +456,7 @@ export class WorldMapGenerator {
     // River generation / rendering moved to ./worldmap/features/rivers.ts
     // generateSimpleRivers, renderSimpleRivers, renderRiverSystems
 
-    _renderForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
-        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
-        // When PNG assets are loaded, tree stamps are ~3x larger than the
-        // procedural icons, so we need a much wider spacing to avoid overlap.
-        const store = getAssetStore();
-        const hasTreeAssets = store.hasCategory('tree') || store.hasCategory('pine');
-        const treeSpacing = hasTreeAssets ? 28 : 12;
-
-        for (let y = treeSpacing; y < height - treeSpacing; y += treeSpacing) {
-            for (let x = treeSpacing; x < width - treeSpacing; x += treeSpacing) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const m = moistureMap[idx];
-
-                if (h <= seaLevel || h >= mountainLevel * 0.9) continue;
-                if (m < 0.45) continue;
-
-                const forestChance = (m - 0.45) * 2 * forestDensity;
-                if (rng.next() > forestChance) continue;
-
-                const offsetX = rng.nextFloat(-4, 4);
-                const offsetY = rng.nextFloat(-4, 4);
-                const size = rng.nextFloat(6, 10);
-                const type = rng.next() > 0.4 ? 'deciduous' : 'pine';
-
-                // Seed the variant picker from grid position so re-renders
-                // with the same map pick the same tree variant
-                const variantSeed = (x * 73856093) ^ (y * 19349663);
-                drawTreeSmart(ctx, x + offsetX, y + offsetY, size, { type }, variantSeed);
-            }
-        }
-    }
+    // _renderForests moved to ./worldmap/features/forests.ts as renderForestGrid
 
     // _renderMountainIcons moved to ./worldmap/features/mountains.ts
     // as renderMountainGrid (kept as a fallback - the class doesn't
@@ -891,59 +866,11 @@ export class WorldMapGenerator {
 
     // _renderBookTerrainOverlay moved to ./worldmap/styles.ts
 
-    _renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng) {
-        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
-
-        // Poisson disk for natural spacing (book style = slightly denser)
-        const minDist = Math.max(7, 14 - forestDensity * 7);
-        const treePoints = poissonDiskSample(width, height, minDist, rng);
-
-        for (const pt of treePoints) {
-            const ix = clamp(Math.floor(pt.x), 0, width - 1);
-            const iy = clamp(Math.floor(pt.y), 0, height - 1);
-            const idx = iy * width + ix;
-
-            const h = heightMap[idx];
-            const m = moistureMap[idx];
-            const t = temperatureMap[idx];
-
-            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
-            if (m < 0.35) continue;
-            const forestChance = (m - 0.35) * 2.5 * forestDensity;
-            if (rng.next() > forestChance) continue;
-
-            const type = t < 0.25 ? 'pine' : (rng.next() > 0.35 ? 'deciduous' : 'pine');
-            const size = rng.nextFloat(4, 7);
-            drawBookTree(ctx, pt.x, pt.y, size, { type });
-        }
-    }
-
-    // Legacy method kept for compatibility
-    _renderBookForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
-        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
-        const treeSpacing = 10;
-
-        for (let y = treeSpacing; y < height - treeSpacing; y += treeSpacing) {
-            for (let x = treeSpacing; x < width - treeSpacing; x += treeSpacing) {
-                const idx = y * width + x;
-                const h = heightMap[idx];
-                const m = moistureMap[idx];
-
-                if (h <= seaLevel || h >= mountainLevel * 0.9) continue;
-                if (m < 0.45) continue;
-
-                const forestChance = (m - 0.45) * 2 * forestDensity;
-                if (rng.next() > forestChance) continue;
-
-                const offsetX = rng.nextFloat(-3, 3);
-                const offsetY = rng.nextFloat(-3, 3);
-                const size = rng.nextFloat(5, 8);
-                const type = rng.next() > 0.4 ? 'deciduous' : 'pine';
-
-                drawBookTree(ctx, x + offsetX, y + offsetY, size, { type });
-            }
-        }
-    }
+    // _renderBookNaturalForests moved to ./worldmap/features/forests.ts
+    // as renderBookNaturalForests.
+    //
+    // _renderBookForests (legacy grid) moved to the same file
+    // as renderBookForestGrid.
 
     // _renderBookMountains moved to ./worldmap/features/mountains.ts
     // as renderBookMountainGrid.
@@ -965,46 +892,8 @@ export class WorldMapGenerator {
      * Render forests using Poisson disk sampling for natural spacing
      * Trees cluster in moist areas and thin out in dry areas
      */
-    _renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng) {
-        const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
-
-        // Poisson disk for natural spacing
-        const minDist = Math.max(8, 16 - forestDensity * 8);
-        const treePoints = poissonDiskSample(width, height, minDist, rng);
-
-        for (const pt of treePoints) {
-            const ix = clamp(Math.floor(pt.x), 0, width - 1);
-            const iy = clamp(Math.floor(pt.y), 0, height - 1);
-            const idx = iy * width + ix;
-
-            const h = heightMap[idx];
-            const m = moistureMap[idx];
-            const t = temperatureMap[idx];
-
-            // Only draw on land, not mountains
-            if (h <= seaLevel || h >= mountainLevel * 0.88) continue;
-
-            // Moisture threshold with smooth falloff
-            if (m < 0.35) continue;
-            const forestChance = (m - 0.35) * 2.5 * forestDensity;
-            if (rng.next() > forestChance) continue;
-
-            // Tree type based on temperature
-            let type;
-            if (t < 0.25) {
-                type = 'pine'; // Cold = conifers
-            } else if (t > 0.7) {
-                type = 'deciduous'; // Tropical = broad leaves
-                if (rng.next() > 0.5) continue; // Sparser in savanna
-            } else {
-                type = rng.next() > 0.35 ? 'deciduous' : 'pine'; // Mixed
-            }
-
-            const size = rng.nextFloat(5, 9);
-            const variantSeed = (Math.floor(pt.x) * 73856093) ^ (Math.floor(pt.y) * 19349663);
-            drawTreeSmart(ctx, pt.x, pt.y, size, { type }, variantSeed);
-        }
-    }
+    // _renderNaturalForests moved to ./worldmap/features/forests.ts
+    // as renderNaturalForests.
 
     // _renderMountainRidges and _renderBookMountainRidges moved to
     // ./worldmap/features/mountains.ts as renderMountainRidges and
