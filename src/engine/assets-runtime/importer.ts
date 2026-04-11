@@ -50,8 +50,16 @@ export interface ImportResult {
 //      the `...normal` version of the same base, in which case skip
 //      this one (the normal version wins the duplicate)
 
-const VARIANT_SUFFIX_RE = /(sample|custom|colors?|nb)\.(png|jpg|jpeg|webp)$/i;
-const NORMAL_SUFFIX_RE = /normal\.(png|jpg|jpeg|webp)$/i;
+// Match variant suffixes with optional trailing digits before the
+// extension. This catches both the standard form (013lordcastlecustom.png)
+// and the numbered form (ultimatecastlespackcustom001.png,
+// bicitypacksample27.png) used in the Ultimate packs.
+const VARIANT_SUFFIX_RE = /(sample|custom|colors?|nb)\d*\.(png|jpg|jpeg|webp)$/i;
+
+// Same relaxation for the normal variant so packs like
+// zultimatecastlespacknormal001.png through 012.png are also
+// recognised as the real assets.
+const NORMAL_SUFFIX_RE = /normal\d*\.(png|jpg|jpeg|webp)$/i;
 
 /**
  * Stateless path check: rejects files that are clearly not map assets
@@ -80,10 +88,18 @@ export function shouldSkipPath(path: string): string | null {
     if (lower.includes('/textures/paper/')) return 'background texture';
     if (lower.includes('/overlays/')) return 'background overlay';
 
-    // Font folders
+    // Wonderdraft themes folder - paper/background/frame assets, not
+    // map stamps. The README explicitly says "you will have two new
+    // folders: 'assets' and 'themes'". We only want the assets tree.
+    if (lower.includes('/themes/')) return 'theme file';
+    if (lower.startsWith('themes/')) return 'theme file';
+
+    // Font folders and font files
     if (lower.includes('/fonts/')) return 'font';
+    if (/\.(ttf|otf|woff2?)$/i.test(lower)) return 'font';
 
     // Wonderdraft variant suffixes: sample, custom, colors, NB
+    // Regex matches with optional trailing digits (custom01, sample27, etc.)
     const basename = lower.split('/').pop() ?? '';
     if (VARIANT_SUFFIX_RE.test(basename)) {
         // Extract which variant for the diagnostic
@@ -97,17 +113,23 @@ export function shouldSkipPath(path: string): string | null {
 }
 
 /**
- * Strip the extension AND any "normal" suffix from a basename so we
- * can detect duplicate entries (e.g. castle.png and castlenormal.png
- * are the same base "castle").
+ * Strip the extension, any trailing digits, and any "normal" suffix
+ * from a basename so we can detect duplicate entries. The trailing
+ * number handling lets us map multi-asset packs like
+ *   zultimatecastlespacknormal001.png
+ *   zultimatecastlespacknormal002.png
+ * to the same base key "zultimatecastlespack", so dedup still works
+ * correctly across numbered variants.
  */
 function baseNameKey(path: string): string {
     const lower = path.toLowerCase();
     const filename = lower.split('/').pop() ?? '';
     // Strip extension
     let base = filename.replace(/\.(png|jpg|jpeg|webp)$/i, '');
-    // Strip "normal" suffix (with or without underscore)
-    base = base.replace(/_?normal$/i, '');
+    // Strip "normal" suffix with optional trailing digits and optional underscore
+    base = base.replace(/_?normal\d*$/i, '');
+    // Strip trailing digits (asset index within a pack)
+    base = base.replace(/\d+$/, '');
     return base;
 }
 

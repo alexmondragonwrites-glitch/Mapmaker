@@ -199,6 +199,11 @@ const KEYWORD_TO_CATEGORY: Array<[string, AssetCategory]> = [
     ['tree', 'tree'],
 
     // Forest / woodland tiles (large masses)
+    // forest_town / forest-town must win over plain "forest" so a
+    // Fairy pack file like forest_town.png goes to village, not forest
+    ['forest_town', 'village'],
+    ['forest-town', 'village'],
+    ['foresttown', 'village'],
     ['forest', 'forest'],
     ['woodland', 'forest'],
     ['grove', 'forest'],
@@ -266,10 +271,55 @@ const KEYWORD_TO_CATEGORY: Array<[string, AssetCategory]> = [
     ['ship', 'ship'],
     ['boat', 'ship'],
 
-    // Ruins
+    // Ruins (also used for dungeons, evil lairs, traps)
     ['ruin', 'ruins'],
     ['crumble', 'ruins'],
     ['broken', 'ruins'],
+    ['dungeon', 'ruins'],
+    ['evildungeon', 'ruins'],
+    ['trap', 'ruins'],
+    ['grave', 'ruins'],
+    ['tomb', 'ruins'],
+
+    // Dark / Grim themed keywords map to their structural equivalent:
+    // darkark / darkship  -> ship (they're boats)
+    // darktown / darkvillage / darkcity -> city
+    // darktower / eviltower / darkwatchtower -> tower
+    // darkhill / evilhill -> hill
+    // darkmountain / evilmountain / horrormontain -> mountain
+    // darktree / treedarkfant -> tree
+    // cultisttemple / grotesquetemple -> temple
+    // darktemple -> temple
+    // wartent / tente -> camp (tent)
+    // Most of these already match via the base keyword (city, tower,
+    // mountain, etc.) because the classifier uses substring match.
+    // Add the ones that don't have an obvious base word:
+    ['darkark', 'ship'],
+    ['drakkar', 'ship'],
+    ['rowboat', 'ship'],
+    ['tente', 'camp'],
+    ['wartent', 'camp'],
+    ['chaumiere', 'house'],         // FR cottage
+    ['villageeglise', 'church'],    // FR "village church"
+    ['nordichouse', 'house'],
+    ['savagetribe', 'hut'],
+    ['tribehut', 'hut'],
+    ['elventree', 'house_elven'],
+    ['cultist', 'temple'],
+    ['grimdark', 'city'],
+    ['badlands', 'plateau'],
+    ['plateau', 'plateau'],
+    ['gallows', 'ruins'],
+    ['wagon', 'camp'],
+    ['wizarding', 'school'],
+    ['monster', 'decoration'],      // seamonsters etc.
+    ['cerf', 'decoration'],          // deer
+    ['sanglier', 'decoration'],      // boar
+    ['boar', 'decoration'],
+    ['deer', 'decoration'],
+    ['dragon', 'decoration'],
+    ['banniere', 'cartouche'],      // FR banner
+    ['encre', 'cartouche'],          // FR ink cartouche
 
     // Fields
     ['cornfield', 'field'],
@@ -313,10 +363,29 @@ export function classifyFilename(path: string): AssetCategory | null {
     const parts = normalized.split('/').filter(p => p.length > 0);
     const filename = parts[parts.length - 1] ?? '';
 
-    // Pass 1: walk the folder segments from closest-to-file outward.
-    // This means if the path is "Mazenc/sprites/mountains/peak_01", we
-    // check "mountains" first, then "sprites", then "Mazenc". The first
-    // segment that maps to a real category wins.
+    // Pass order: most-specific wins, but the filename is more
+    // authoritative than the containing folder.
+    //
+    //   1. Longest keyword match against the filename only.
+    //      Example: Fairy_settlements/castle.png -> castle
+    //      (even though "settlements" in the folder would map to village)
+    //
+    //   2. Folder segment exact match. Catches cases where the
+    //      filename has no recognisable keyword but the folder does,
+    //      e.g. fortress/big_fort.png -> fortress.
+    //
+    //   3. Longest keyword match against the full path. Final fallback
+    //      for weird packs like 043wizardingschool/building.png where
+    //      the filename says "building" (house) but the folder name
+    //      "wizardingschool" should win.
+    const sorted = [...KEYWORD_TO_CATEGORY].sort((a, b) => b[0].length - a[0].length);
+
+    // Pass 1: longest keyword match on the filename only
+    for (const [keyword, cat] of sorted) {
+        if (filename.includes(keyword)) return cat;
+    }
+
+    // Pass 2: folder segment exact match
     for (let i = parts.length - 2; i >= 0; i--) {
         const seg = parts[i];
         if (FOLDER_NOISE.has(seg)) continue;
@@ -325,14 +394,7 @@ export function classifyFilename(path: string): AssetCategory | null {
         }
     }
 
-    // Pass 2: keyword match on filename (longest match wins).
-    // Sort by keyword length descending so "house_elven" beats "house".
-    const sorted = [...KEYWORD_TO_CATEGORY].sort((a, b) => b[0].length - a[0].length);
-    for (const [keyword, cat] of sorted) {
-        if (filename.includes(keyword)) return cat;
-    }
-
-    // Pass 3: keyword match anywhere in the path (fallback for weird packs)
+    // Pass 3: longest keyword match anywhere in the path
     for (const [keyword, cat] of sorted) {
         if (normalized.includes(keyword)) return cat;
     }
@@ -343,6 +405,7 @@ export function classifyFilename(path: string): AssetCategory | null {
 /** Quick sanity test for the default conventions. */
 export function selfTest(): boolean {
     const tests: Array<[string, AssetCategory | null]> = [
+        // Basic folder matches
         ['mountain_01.png', 'mountain'],
         ['mountains/peak_42.png', 'mountain'],
         ['Mazenc/sprites/mountains/peak_01.png', 'mountain'],
@@ -361,6 +424,39 @@ export function selfTest(): boolean {
         ['windmill/old.png', 'windmill'],
         ['ship/galleon.png', 'ship'],
         ['airships/small.png', 'airship'],
+
+        // Wonderdraft numbered pack patterns (from the user's README analysis).
+        // Filename is always most authoritative - a file called ruin.png is
+        // a ruin even if it sits inside a "cityofthieves" folder.
+        ['013lordcastlenormal.png', 'castle'],
+        ['012princesstower_normal.png', 'tower'],
+        ['014vintagewindmill_normal.png', 'windmill'],
+        ['020tribehut/020tribehut.png', 'hut'],
+        ['028badlandsplateaus/foo.png', 'plateau'],
+        ['036woodenbridge/bridge.png', 'bridge'],
+        ['037Holytemple/temple.png', 'temple'],
+        ['038cityofthieves/ruin.png', 'ruins'],       // ruin.png is a ruin
+        ['041lorddomain/house.png', 'house'],
+        ['042wagoncamp/tent.png', 'camp'],
+        ['043wizardingschool/building.png', 'house'], // building.png = generic house
+        ['048Peacefulvillage/hut.png', 'hut'],         // hut.png is a hut
+        ['050friendlysailingship/boat.png', 'ship'],
+
+        // Dark/grim/cultist variants
+        ['cultisttemple_01.png', 'temple'],
+        ['darktown_03.png', 'village'],        // "town" maps to village everywhere
+        ['grimdarkcityy01.png', 'city'],
+        ['evildungeon_01.png', 'ruins'],
+        ['darkmountain05.png', 'mountain'],
+
+        // Fairy pack (no suffix) - classifier should still handle
+        ['Fairy_settlements/castle.png', 'castle'],
+        ['Fairy_settlements/forest_town.png', 'village'],
+        ['Fairy_settlements/house.png', 'house'],
+        ['Fairy_settlements/little_city.png', 'city'],
+        ['Fairy_settlements/tower.png', 'tower'],
+
+        // Unknown files
         ['random_noise_file.png', null],
     ];
     let ok = true;
