@@ -76,7 +76,27 @@ export default function App() {
   // Current view state (zoom/pan) reported from MapCanvas so we can
   // show it in the StatusBar and wire up the reset button
   const [view, setView] = useState({ zoom: 1, panX: 0, panY: 0 });
-  const handleViewChange = useCallback((v: typeof view) => setView(v), []);
+  const pendingViewRef = useRef(view);
+  const viewFrameRef = useRef<number | null>(null);
+  const handleViewChange = useCallback((v: typeof view) => {
+    pendingViewRef.current = v;
+    if (viewFrameRef.current !== null) return;
+    viewFrameRef.current = requestAnimationFrame(() => {
+      viewFrameRef.current = null;
+      const next = pendingViewRef.current;
+      setView(prev => (
+        prev.zoom === next.zoom && prev.panX === next.panX && prev.panY === next.panY
+          ? prev
+          : next
+      ));
+    });
+  }, []);
+  useEffect(() => () => {
+    if (viewFrameRef.current !== null) {
+      cancelAnimationFrame(viewFrameRef.current);
+      viewFrameRef.current = null;
+    }
+  }, []);
   const handleResetView = useCallback(() => {
     mapCanvasRef.current?.resetView();
   }, []);

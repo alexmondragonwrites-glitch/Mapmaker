@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent, type MouseEvent as RMouseEvent } from 'react';
 
 interface MapCanvasProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
@@ -47,6 +47,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         startPanY: number;
         pointerId: number;
     } | null>(null);
+    // When a drag-pan happened, suppress the next click so it doesn't
+    // bubble into canvas click listeners (zoom-to-city etc.).
+    const suppressClickRef = useRef(false);
 
     // Notify parent whenever the view changes
     useEffect(() => {
@@ -128,7 +131,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         const dy = e.clientY - state.startY;
         // Only start panning after a small threshold so tiny clicks still
         // pass through to the canvas click handlers
-        if (Math.hypot(dx, dy) < 3) return;
+        if (Math.hypot(dx, dy) < 6) return;
         state.moved = true;
 
         setPanX(state.startPanX + dx);
@@ -161,8 +164,20 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             }
         }
 
+        if (state.moved) {
+            suppressClickRef.current = true;
+        }
         dragStateRef.current = null;
     }, [onCanvasClick, panX, panY, zoom, width, height]);
+
+    // Capture click before the native canvas click handler from
+    // useZoom runs. If the user just panned, swallow this click.
+    const handleClickCapture = useCallback((e: RMouseEvent<HTMLDivElement>) => {
+        if (!suppressClickRef.current) return;
+        suppressClickRef.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
 
     // ── Double click to reset ───────────────────────────────────────
 
@@ -221,6 +236,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
+            onClickCapture={handleClickCapture}
             onDoubleClick={handleDoubleClick}
             style={{ touchAction: 'none' }}
         >
