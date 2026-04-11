@@ -29,6 +29,11 @@ import {
     renderWonderdraftStyle,
     renderBookTerrainOverlay,
 } from './worldmap/styles';
+import {
+    generateSimpleRivers,
+    renderSimpleRivers,
+    renderRiverSystems,
+} from './worldmap/features/rivers';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -202,7 +207,7 @@ export class WorldMapGenerator {
             cfg.width, cfg.height, heightMap, cfg.seaLevel, cfg.mountainLevel, rng, cfg.riverCount
         );
         const rivers = riverSystems.map(rs => rs.points);
-        this._renderRiverSystems(ctx, cfg, riverSystems);
+        renderRiverSystems(ctx, cfg, riverSystems);
 
         // Render lore rivers (named)
         if (loreHints && loreHints.rivers.length > 0) {
@@ -436,80 +441,8 @@ export class WorldMapGenerator {
     // _renderParchmentStyle, _renderWonderdraftBase,
     // _renderBookTerrainOverlay, _drawContourLine
 
-    _generateRivers(cfg, heightMap, rng) {
-        const { width, height, seaLevel, mountainLevel, riverCount } = cfg;
-        const rivers = [];
-
-        for (let r = 0; r < riverCount; r++) {
-            let attempts = 0;
-            let startX, startY;
-
-            // Find a mountain start point
-            do {
-                startX = rng.nextInt(width * 0.1, width * 0.9);
-                startY = rng.nextInt(height * 0.1, height * 0.9);
-                attempts++;
-            } while (heightMap[startY * width + startX] < mountainLevel * 0.85 && attempts < 200);
-
-            if (attempts >= 200) continue;
-
-            const points = [{ x: startX, y: startY }];
-            let cx = startX, cy = startY;
-
-            // Flow downhill
-            for (let step = 0; step < 500; step++) {
-                const currentH = heightMap[Math.floor(cy) * width + Math.floor(cx)];
-                if (currentH < seaLevel) break;
-
-                let bestX = cx, bestY = cy, bestH = currentH;
-
-                // Check neighbors with some randomness
-                for (let dy = -3; dy <= 3; dy++) {
-                    for (let dx = -3; dx <= 3; dx++) {
-                        const nx = Math.floor(cx + dx);
-                        const ny = Math.floor(cy + dy);
-                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-
-                        const nh = heightMap[ny * width + nx] + rng.nextFloat(0, 0.005);
-                        if (nh < bestH) {
-                            bestH = nh;
-                            bestX = nx;
-                            bestY = ny;
-                        }
-                    }
-                }
-
-                if (bestX === cx && bestY === cy) break;
-                cx = bestX;
-                cy = bestY;
-
-                // Don't add every single point - subsample
-                if (step % 3 === 0) {
-                    points.push({ x: cx, y: cy });
-                }
-            }
-
-            if (points.length > 5) {
-                rivers.push(points);
-            }
-        }
-
-        return rivers;
-    }
-
-    _renderRivers(ctx, cfg, rivers, style) {
-        const color = style === 'book' ? 'rgba(40, 65, 105, 0.7)' :
-                      style === 'parchment' ? PALETTES.parchment.water : '#4a90c4';
-
-        for (const river of rivers) {
-            // River gets wider as it flows
-            for (let i = 0; i < river.length - 1; i++) {
-                const t = i / river.length;
-                const width = 1 + t * 3;
-                drawRiver(ctx, [river[i], river[i + 1]], width, color);
-            }
-        }
-    }
+    // River generation / rendering moved to ./worldmap/features/rivers.ts
+    // generateSimpleRivers, renderSimpleRivers, renderRiverSystems
 
     _renderForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
         const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
@@ -1058,48 +991,7 @@ export class WorldMapGenerator {
 
     // ── Natural Rendering Methods (New Terrain Engine) ──────────────
 
-    /**
-     * Render rivers as a connected system with varying widths
-     * Rivers that merge show as thicker downstream
-     */
-    _renderRiverSystems(ctx, cfg, riverSystems) {
-        const isBook = cfg.mapStyle === 'book';
-        const isParchment = cfg.mapStyle === 'parchment';
-        const color = isBook ? 'rgba(40, 65, 105, 0.7)' :
-                      isParchment ? PALETTES.parchment.water : '#4a90c4';
-
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        for (const river of riverSystems) {
-            const pts = river.points;
-            if (pts.length < 3) continue;
-
-            // Draw river with varying width
-            for (let i = 0; i < pts.length - 1; i++) {
-                const p1 = pts[i];
-                const p2 = pts[i + 1];
-                ctx.strokeStyle = color;
-                ctx.lineWidth = p1.width || 1;
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-
-                // Smooth curve
-                if (i < pts.length - 2) {
-                    const p3 = pts[i + 2];
-                    const cpx = (p2.x + p3.x) / 2;
-                    const cpy = (p2.y + p3.y) / 2;
-                    ctx.quadraticCurveTo(p2.x, p2.y, cpx, cpy);
-                } else {
-                    ctx.lineTo(p2.x, p2.y);
-                }
-                ctx.stroke();
-            }
-        }
-
-        ctx.restore();
-    }
+    // _renderRiverSystems moved to ./worldmap/features/rivers.ts
 
     /**
      * Render forests using Poisson disk sampling for natural spacing
