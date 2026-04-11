@@ -266,8 +266,9 @@ export class CityMapGenerator {
             this._renderWalls(ctx, cfg, outline, rng);
         }
 
-        // Roads (radial + ring)
-        const roads = this._generateRoads(cfg, centerX, centerY, cityRadius, rng, districts);
+        // Organic road network: gates on the outline, curved main roads,
+        // plus branching secondary streets
+        const roads = this._generateRoads(cfg, outline, rng, districts);
         this._renderRoads(ctx, cfg, roads);
 
         // Bridges where roads cross the river
@@ -590,34 +591,131 @@ export class CityMapGenerator {
         ctx.stroke();
     }
 
-    _generateRoads(cfg, centerX, centerY, cityRadius, rng, districts) {
-        const roads = [];
+    /**
+     * Organic road network:
+     *
+     * 1. Pick 2-4 gates as sample points along the outline polygon.
+     * 2. Build "main roads": Bezier curves from each gate toward a
+     *    central plaza near the city heart. The plaza is offset from
+     *    the geometric center using noise, so the crossroads are never
+     *    exactly in the middle.
+     * 3. Add secondary branches that start on main roads and wander
+     *    toward random interior points, so blocks get subdivided.
+     * 4. No perfectly concentric ring roads anywhere.
+     */
+    _generateRoads(cfg, outline, rng, _districts) {
+        const roads: Array<{ type: string; points: Array<{x:number;y:number}>; width: number }> = [];
+        const cx = outline.cx;
+        const cy = outline.cy;
 
-        // Main radial roads from center to edges
-        const roadCount = Math.max(4, districts.length);
-        for (let i = 0; i < roadCount; i++) {
-            const angle = (i / roadCount) * Math.PI * 2;
-            roads.push({
-                type: 'radial',
-                points: [
-                    { x: centerX, y: centerY },
-                    { x: centerX + Math.cos(angle) * cityRadius * 1.1, y: centerY + Math.sin(angle) * cityRadius * 1.1 },
-                ],
-                width: 4,
-            });
+        // City heart: offset from the geometric center by ±15% of average radius
+        const heartJitter = outline.avgRadius * 0.15;
+        const heart = {
+            x: cx + rng.nextFloat(-heartJitter, heartJitter),
+            y: cy + rng.nextFloat(-heartJitter, heartJitter),
+        };
+
+        // Pick 3-4 gates on the outline - evenly spaced indices but with jitter
+        const gateCount = rng.nextInt(3, 4);
+        const pts = outline.points;
+        const gates: Array<{x:number;y:number}> = [];
+        const gateIndices: number[] = [];
+        for (let i = 0; i < gateCount; i++) {
+            const baseIdx = Math.floor((i / gateCount) * pts.length);
+            const jitter = rng.nextInt(-5, 5);
+            const idx = ((baseIdx + jitter) % pts.length + pts.length) % pts.length;
+            gateIndices.push(idx);
+            gates.push({ x: pts[idx].x, y: pts[idx].y });
         }
 
-        // Ring roads
-        const ringRadii = [cityRadius * 0.35, cityRadius * 0.65];
-        for (const r of ringRadii) {
-            const ringPoints = [];
-            for (let a = 0; a <= Math.PI * 2; a += 0.1) {
-                ringPoints.push({
-                    x: centerX + Math.cos(a) * r,
-                    y: centerY + Math.sin(a) * r,
+        // Build main roads: each gate connects to the heart through a curved path.
+        // We emit a polyline of ~20 points sampled along a quadratic Bezier with
+        // a control point offset perpendicular to the straight line.
+        for (const gate of gates) {
+            const dx = heart.x - gate.x;
+            const dy = heart.y - gate.y;
+            const len = Math.hypot(dx, dy);
+            // Perpendicular offset for the control point (curvature)
+            const px = -dy / len;
+            const py = dx / len;
+            const curve = rng.nextFloat(-len * 0.15, len * 0.15);
+            const controlX = (gate.x + heart.x) / 2 + px * curve;
+            const controlY = (gate.y + heart.y) / 2 + py * curve;
+
+            const samples = 20;
+            const points: Array<{x:number;y:number}> = [];
+            for (let t = 0; t <= samples; t++) {
+                const u = t / samples;
+                const mt = 1 - u;
+                // Quadratic Bezier
+                const x = mt * mt * gate.x + 2 * mt * u * controlX + u * u * heart.x;
+                const y = mt * mt * gate.y + 2 * mt * u * controlY + u * u * heart.y;
+                points.push({ x, y });
+            }
+            roads.push({ type: 'main', points, width: 5 });
+        }
+
+        // Small plaza ring around the heart (not a full city-wide ring)
+        const plazaRadius = outline.avgRadius * 0.08;
+        const plazaPoints: Array<{x:number;y:number}> = [];
+        for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.2) {
+            plazaPoints.push({
+                x: heart.x + Math.cos(a) * plazaRadius,
+                y: heart.y + Math.sin(a) * plazaRadius,
+            });
+        }
+        roads.push({ type: 'plaza', points: plazaPoints, width: 4 });
+
+        // Branching secondary streets: start on a random main road segment,
+        // wander toward a random interior point inside the outline.
+        const branchCount = 6 + Math.floor(gateCount * 2);
+        for (let b = 0; b < branchCount; b++) {
+            // Pick a random main road
+            const mainRoads = roads.filter(r => r.type === 'main');
+            if (mainRoads.length === 0) break;
+            const source = mainRoads[rng.nextInt(0, mainRoads.length - 1)];
+
+            // Start at a random point along its length (not at the endpoints)
+            const startIdx = rng.nextInt(2, source.points.length - 3);
+            const start = source.points[startIdx];
+
+            // Pick a target inside the outline, away from the start
+            let target: {x:number;y:number} | null = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                const tAngle = rng.nextFloat(0, Math.PI * 2);
+                const tDist = rng.nextFloat(outline.avgRadius * 0.2, outline.avgRadius * 0.7);
+                const tx = cx + Math.cos(tAngle) * tDist;
+                const ty = cy + Math.sin(tAngle) * tDist;
+                // Must be inside the outline and not too close to the start
+                if (outline.containsPoint(tx, ty, 10) && Math.hypot(tx - start.x, ty - start.y) > 40) {
+                    target = { x: tx, y: ty };
+                    break;
+                }
+            }
+            if (!target) continue;
+
+            // Build a slightly wiggly polyline from start to target
+            const segLen = 12;
+            const totalDist = Math.hypot(target.x - start.x, target.y - start.y);
+            const steps = Math.max(2, Math.ceil(totalDist / segLen));
+            const branchPoints: Array<{x:number;y:number}> = [];
+            const sdx = (target.x - start.x) / steps;
+            const sdy = (target.y - start.y) / steps;
+            // Perpendicular wiggle direction
+            const wiggleLen = Math.hypot(sdx, sdy);
+            const wpx = wiggleLen > 0 ? -sdy / wiggleLen : 0;
+            const wpy = wiggleLen > 0 ?  sdx / wiggleLen : 0;
+
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                // Sinusoidal wiggle that starts and ends at zero
+                const wiggle = Math.sin(t * Math.PI) * rng.nextFloat(-6, 6);
+                branchPoints.push({
+                    x: start.x + sdx * i + wpx * wiggle,
+                    y: start.y + sdy * i + wpy * wiggle,
                 });
             }
-            roads.push({ type: 'ring', points: ringPoints, width: 3 });
+            roads.push({ type: 'branch', points: branchPoints, width: 2.5 });
         }
 
         return roads;
