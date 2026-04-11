@@ -14,6 +14,11 @@ import {
     renderCloudEdges, renderPaintedForests,
 } from '../bookstyle';
 import {
+    drawMountainSmart, drawVolcanoSmart, drawTreeSmart,
+    drawCastleSmart,
+} from '../assets-runtime/bridge';
+import { getAssetStore } from '../assets-runtime';
+import {
     generateAdvancedHeightMap, generateTemperatureMap, generateAdvancedMoistureMap,
     generateRiverSystems, classifyBiome, getBiomeColor, BIOME_COLORS,
     poissonDiskSample, findMountainRidges,
@@ -587,7 +592,10 @@ export class WorldMapGenerator {
                 const size = rng.nextFloat(6, 10);
                 const type = rng.next() > 0.4 ? 'deciduous' : 'pine';
 
-                drawTree(ctx, x + offsetX, y + offsetY, size, { type });
+                // Seed the variant picker from grid position so re-renders
+                // with the same map pick the same tree variant
+                const variantSeed = (x * 73856093) ^ (y * 19349663);
+                drawTreeSmart(ctx, x + offsetX, y + offsetY, size, { type }, variantSeed);
             }
         }
     }
@@ -604,12 +612,13 @@ export class WorldMapGenerator {
                 const offsetX = rng.nextFloat(-5, 5);
                 const offsetY = rng.nextFloat(-5, 5);
                 const size = 12 + (h - mountainLevel) * 40;
+                const variantSeed = (x * 83492791) ^ (y * 12996221);
 
                 // Small chance of volcano
                 if (h > mountainLevel + 0.15 && rng.next() > 0.92) {
-                    drawVolcano(ctx, x + offsetX, y + offsetY, size * 1.3);
+                    drawVolcanoSmart(ctx, x + offsetX, y + offsetY, size * 1.3, {}, variantSeed);
                 } else {
-                    drawMountain(ctx, x + offsetX, y + offsetY, size, { snow: h > 0.78 });
+                    drawMountainSmart(ctx, x + offsetX, y + offsetY, size, { snow: h > 0.78 }, variantSeed);
                 }
             }
         }
@@ -753,7 +762,8 @@ export class WorldMapGenerator {
     _renderCities(ctx, cfg, cities) {
         for (const city of cities) {
             if (city.isCapital || city.size === 'large') {
-                drawCastle(ctx, city.x, city.y, 18);
+                const variantSeed = (city.x * 2654435761) ^ (city.y * 1597334677);
+                drawCastleSmart(ctx, city.x, city.y, 18, variantSeed);
             } else {
                 const s = city.size === 'medium' ? 6 : 4;
                 ctx.fillStyle = '#2a1a0a';
@@ -1234,7 +1244,8 @@ export class WorldMapGenerator {
             }
 
             const size = rng.nextFloat(5, 9);
-            drawTree(ctx, pt.x, pt.y, size, { type });
+            const variantSeed = (Math.floor(pt.x) * 73856093) ^ (Math.floor(pt.y) * 19349663);
+            drawTreeSmart(ctx, pt.x, pt.y, size, { type }, variantSeed);
         }
     }
 
@@ -1243,11 +1254,12 @@ export class WorldMapGenerator {
      */
     _renderMountainRidges(ctx, cfg, ridgePoints, rng) {
         for (const pt of ridgePoints) {
+            const variantSeed = (Math.floor(pt.x) * 83492791) ^ (Math.floor(pt.y) * 12996221);
             // Small chance of volcano on highest peaks
             if (pt.isPeak && pt.height > cfg.mountainLevel + 0.18 && rng.next() > 0.9) {
-                drawVolcano(ctx, pt.x, pt.y, pt.size * 1.2);
+                drawVolcanoSmart(ctx, pt.x, pt.y, pt.size * 1.2, {}, variantSeed);
             } else {
-                drawMountain(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 });
+                drawMountainSmart(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 }, variantSeed);
             }
         }
     }

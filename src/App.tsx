@@ -65,6 +65,18 @@ export default function App() {
     }
   }, [config]);
 
+  // Re-render once the asset cache finishes loading (so the first
+  // render after page load can pick up PNG assets from IndexedDB)
+  const prevAssetsLoading = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (prevAssetsLoading.current === true && assetsLoading === false) {
+      if (canvasRef.current && activeGenerator) {
+        generate(canvasRef.current);
+      }
+    }
+    prevAssetsLoading.current = assetsLoading;
+  }, [assetsLoading, activeGenerator, generate]);
+
   const handleSelectGenerator = useCallback((id: string) => {
     setActivePanel('generator');
     switchGenerator(id);

@@ -13,6 +13,53 @@ import {
     drawStatue, drawBarracks, drawLibrary, drawDock,
     drawShack, drawNobleHouse, drawShrine, drawBridge,
 } from '../assets';
+import { tryDrawAsset } from '../assets-runtime/bridge';
+import type { AssetCategory } from '../assets-runtime';
+
+// Map procedural draw functions to their asset category, so the bridge
+// can look up PNG variants if the user has installed an asset pack.
+const DRAW_FN_CATEGORY = new Map<Function, AssetCategory>([
+    [drawHumanHouse,   'house_human'],
+    [drawElvenHouse,   'house_elven'],
+    [drawDwarvenHouse, 'house_dwarven'],
+    [drawNobleHouse,   'house'],
+    [drawShack,        'house'],
+    [drawTower,        'tower'],
+    [drawTemple,       'temple'],
+    [drawChurch,       'church'],
+    [drawShrine,       'shrine'],
+    [drawTavern,       'tavern'],
+    [drawCastle,       'castle'],
+    [drawTree,         'tree'],
+    [drawForge,        'forge'],
+    [drawGuildHall,    'house'],
+    [drawWarehouse,    'house'],
+    [drawWell,         'decoration'],
+    [drawFountain,     'decoration'],
+    [drawMarketStall,  'decoration'],
+    [drawWindmill,     'windmill'],
+    [drawStatue,       'decoration'],
+    [drawBarracks,     'house'],
+    [drawLibrary,      'house'],
+    [drawDock,         'decoration'],
+]);
+
+/**
+ * Draw a building using the PNG asset if one is loaded for the
+ * category, otherwise fall back to the procedural function.
+ */
+function drawBuildingSmart(
+    ctx: any,
+    drawFn: Function,
+    x: number,
+    y: number,
+    size: number,
+    seed: number,
+): void {
+    const category = DRAW_FN_CATEGORY.get(drawFn);
+    if (category && tryDrawAsset(ctx, category, x, y, size, seed)) return;
+    (drawFn as any)(ctx, x, y, size);
+}
 
 // ── District Building Mix Definitions ───────────────────────────────
 // Each district type has a weighted list of buildings it spawns.
@@ -1288,7 +1335,8 @@ export class CityMapGenerator {
                             if (effective === 'dwarven') drawFn = drawDwarvenHouse;
                         }
 
-                        drawFn(ctx, bx, by, size);
+                        const variantSeed = (Math.floor(bx) * 73856093) ^ (Math.floor(by) * 19349663);
+                        drawBuildingSmart(ctx, drawFn, bx, by, size, variantSeed);
                         placed.push({ x: bx, y: by, r: profile.spacing });
                     }
                 }
@@ -1337,7 +1385,8 @@ export class CityMapGenerator {
                     if (effective === 'dwarven') drawFn = drawDwarvenHouse;
                 }
 
-                drawFn(ctx, bx, by, size);
+                const variantSeed = (Math.floor(bx) * 73856093) ^ (Math.floor(by) * 19349663);
+                drawBuildingSmart(ctx, drawFn, bx, by, size, variantSeed);
                 placed.push({ x: bx, y: by, r: profile.spacing });
                 placedThis++;
             }
