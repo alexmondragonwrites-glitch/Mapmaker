@@ -1,27 +1,32 @@
 /**
  * Calyndra Mapmaker - World/Land Map Generator
- * Generates procedural fantasy world maps with terrain, rivers, cities, and labels
+ *
+ * This class is the orchestrator for world-map generation. The heavy
+ * work lives in focused modules under ./worldmap/ and ../terrain.ts;
+ * this file wires them together, owns the tab/control contract, and
+ * handles the handful of cache refs shared between passes.
+ *
+ * Module layout:
+ *   ./worldmap/styles.ts              base-layer terrain renderers
+ *   ./worldmap/features/rivers.ts     river generation + drawing
+ *   ./worldmap/features/mountains.ts  grid + ridge mountain drawing
+ *   ./worldmap/features/forests.ts    forest + tree drawing
+ *   ./worldmap/features/cities.ts     city placement, roads, labels, title
+ *   ./worldmap/lore.ts                lore overlay drawing
  */
 
-import { SimplexNoise } from '../noise';
-import { NameGenerator, PALETTES, SeededRandom, clamp, smoothstep, distance, lerpColor } from '../../utils';
-import { drawMountain, drawVolcano, drawTree, drawRiver, drawCastle, drawCompassRose, drawMapBorder, drawScaleBar } from '../assets';
+import { NameGenerator, SeededRandom } from '../../utils';
+import { drawCompassRose, drawMapBorder, drawScaleBar } from '../assets';
 import {
     renderParchmentTexture, renderAgeEffects, renderVignette,
     renderHillshading, renderHandDrawnCoastline, renderWaterWaves,
-    drawBookMountain, drawBookTree, drawBookCity,
     drawBookBorder, drawBookCompass, drawTitleCartouche,
     renderCloudEdges, renderPaintedForests,
 } from '../bookstyle';
 import {
-    drawMountainSmart, drawVolcanoSmart, drawTreeSmart,
-    drawCastleSmart,
-} from '../assets-runtime/bridge';
-import { getAssetStore } from '../assets-runtime';
-import {
     generateAdvancedHeightMap, generateTemperatureMap, generateAdvancedMoistureMap,
-    generateRiverSystems, classifyBiome, getBiomeColor, BIOME_COLORS,
-    poissonDiskSample, findMountainRidges,
+    generateRiverSystems,
+    findMountainRidges,
 } from '../terrain';
 import {
     renderColoredStyle,
@@ -29,20 +34,12 @@ import {
     renderWonderdraftStyle,
     renderBookTerrainOverlay,
 } from './worldmap/styles';
+import { renderRiverSystems } from './worldmap/features/rivers';
 import {
-    generateSimpleRivers,
-    renderSimpleRivers,
-    renderRiverSystems,
-} from './worldmap/features/rivers';
-import {
-    renderMountainGrid,
-    renderBookMountainGrid,
     renderMountainRidges,
     renderBookMountainRidges,
 } from './worldmap/features/mountains';
 import {
-    renderForestGrid,
-    renderBookForestGrid,
     renderNaturalForests,
     renderBookNaturalForests,
 } from './worldmap/features/forests';
@@ -54,6 +51,11 @@ import {
     renderLabels,
     renderTitle,
 } from './worldmap/features/cities';
+import {
+    renderLoreRegions,
+    renderLoreRiverLabels,
+    renderLoreLandmarks,
+} from './worldmap/lore';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -219,7 +221,7 @@ export class WorldMapGenerator {
 
         // Render lore region overlays (subtle borders/labels)
         if (loreHints && loreHints.regions.length > 0) {
-            this._renderLoreRegions(ctx, cfg, loreHints.regions);
+            renderLoreRegions(ctx, cfg, loreHints.regions);
         }
 
         // Generate river systems with tributary merging
@@ -231,7 +233,7 @@ export class WorldMapGenerator {
 
         // Render lore rivers (named)
         if (loreHints && loreHints.rivers.length > 0) {
-            this._renderLoreRiverLabels(ctx, cfg, rivers, loreHints.rivers);
+            renderLoreRiverLabels(ctx, cfg, rivers, loreHints.rivers);
         }
 
         // ── Book style: hand-drawn coastline ──
@@ -272,7 +274,7 @@ export class WorldMapGenerator {
 
         // Render lore landmarks (named mountains, forests, etc.)
         if (loreHints && loreHints.landmarks.length > 0) {
-            this._renderLoreLandmarks(ctx, cfg, loreHints.landmarks, heightMap);
+            renderLoreLandmarks(ctx, cfg, loreHints.landmarks, heightMap);
         }
 
         // Generate cities - use lore cities if available
@@ -397,212 +399,43 @@ export class WorldMapGenerator {
         return this._lastGeneratedData;
     }
 
-    _generateHeightMap(cfg, noise, noise2) {
-        const { width, height, scale, continentShape } = cfg;
-        const map = new Float32Array(width * height);
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const nx = x / width * scale;
-                const ny = y / height * scale;
-
-                // Layered noise
-                let h = noise.fbm(nx, ny, 6, 2.0, 0.5) * 0.6;
-                h += noise.ridgeNoise(nx * 1.5, ny * 1.5, 4) * 0.3;
-                h += noise2.warpedNoise(nx, ny, 0.8, 0.4) * 0.1;
-
-                // Normalize to 0-1
-                h = (h + 1) * 0.5;
-
-                // Apply continent shape
-                if (continentShape === 'island') {
-                    const dx = (x / width - 0.5) * 2;
-                    const dy = (y / height - 0.5) * 2;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    h -= smoothstep(0.3, 0.9, dist) * 0.6;
-                } else if (continentShape === 'pangaea') {
-                    const dx = (x / width - 0.5) * 2;
-                    const dy = (y / height - 0.5) * 2;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    h -= smoothstep(0.5, 1.0, dist) * 0.4;
-                    h += 0.1;
-                } else {
-                    // Natural - soften edges
-                    const edgeFade = 0.05;
-                    const ex = smoothstep(0, edgeFade, x / width) * smoothstep(0, edgeFade, 1 - x / width);
-                    const ey = smoothstep(0, edgeFade, y / height) * smoothstep(0, edgeFade, 1 - y / height);
-                    h *= ex * ey * 0.3 + 0.7;
-                }
-
-                map[y * width + x] = clamp(h, 0, 1);
-            }
-        }
-
-        return map;
-    }
-
-    _generateMoistureMap(cfg, noise) {
-        const { width, height, scale } = cfg;
-        const map = new Float32Array(width * height);
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const nx = x / width * scale * 1.5 + 100;
-                const ny = y / height * scale * 1.5 + 100;
-                map[y * width + x] = (noise.fbm(nx, ny, 4) + 1) * 0.5;
-            }
-        }
-
-        return map;
-    }
-
-    // Style renderers moved to ./worldmap/styles.ts
-    // Kept as a comment for greppability: _renderColoredStyle,
-    // _renderParchmentStyle, _renderWonderdraftBase,
-    // _renderBookTerrainOverlay, _drawContourLine
-
-    // River generation / rendering moved to ./worldmap/features/rivers.ts
-    // generateSimpleRivers, renderSimpleRivers, renderRiverSystems
-
-    // _renderForests moved to ./worldmap/features/forests.ts as renderForestGrid
-
-    // _renderMountainIcons moved to ./worldmap/features/mountains.ts
-    // as renderMountainGrid (kept as a fallback - the class doesn't
-    // call it anymore because renderMountainRidges reads better, but
-    // the function is still exported for anyone who wants the old
-    // grid behaviour).
-
-
-    // ── Lore Rendering Methods ──────────────────────────────────────
-
-    _renderLoreRegions(ctx, cfg, regions) {
-        ctx.save();
-        for (const region of regions) {
-            const rx = region.relX * cfg.width;
-            const ry = region.relY * cfg.height;
-            const rRadius = region.relRadius * Math.min(cfg.width, cfg.height);
-
-            // Subtle region boundary
-            ctx.strokeStyle = 'rgba(42, 26, 10, 0.2)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([8, 8]);
-            ctx.beginPath();
-            ctx.arc(rx, ry, rRadius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Region name
-            ctx.setLineDash([]);
-            ctx.font = 'italic 13px "Palatino Linotype", serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 3;
-            ctx.strokeText(region.name, rx, ry - rRadius + 15);
-            ctx.fillStyle = 'rgba(42, 26, 10, 0.7)';
-            ctx.fillText(region.name, rx, ry - rRadius + 15);
-        }
-        ctx.restore();
-    }
-
-    _renderLoreRiverLabels(ctx, cfg, generatedRivers, loreRivers) {
-        // Label generated rivers with lore names if available
-        const isParchment = cfg.mapStyle === 'parchment';
-        const usedRivers = new Set();
-
-        for (let i = 0; i < Math.min(generatedRivers.length, loreRivers.length); i++) {
-            const river = generatedRivers[i];
-            const loreRiver = loreRivers[i];
-            if (river.length < 10 || !loreRiver.name) continue;
-
-            const midIdx = Math.floor(river.length * 0.4);
-            const pt = river[midIdx];
-
-            ctx.save();
-            ctx.font = 'italic 10px "Palatino Linotype", serif';
-            ctx.fillStyle = isParchment ? PALETTES.parchment.water : '#2a5a8a';
-            ctx.textAlign = 'center';
-
-            const nextPt = river[Math.min(midIdx + 3, river.length - 1)];
-            const angle = Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x);
-            ctx.translate(pt.x, pt.y);
-            ctx.rotate(angle);
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 2;
-            ctx.strokeText(loreRiver.name, 0, -6);
-            ctx.fillText(loreRiver.name, 0, -6);
-            ctx.restore();
-
-            usedRivers.add(i);
-        }
-    }
-
-    _renderLoreLandmarks(ctx, cfg, landmarks, heightMap) {
-        ctx.save();
-        for (const lm of landmarks) {
-            if (lm.relX === null || lm.relY === null) continue;
-
-            const lx = lm.relX * cfg.width;
-            const ly = lm.relY * cfg.height;
-
-            // Render label for the landmark
-            ctx.font = 'bold 10px "Palatino Linotype", serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-            ctx.lineWidth = 3;
-
-            let label = lm.name;
-            let yOffset = 0;
-
-            // Add type-specific prefix/icon hint
-            switch (lm.type) {
-                case 'mountain': label = '⛰ ' + lm.name; yOffset = -8; break;
-                case 'volcano': label = '🌋 ' + lm.name; yOffset = -8; break;
-                case 'forest': label = '🌲 ' + lm.name; yOffset = 4; break;
-                case 'lake': label = '💧 ' + lm.name; yOffset = 4; break;
-                case 'ruins': label = '🏚 ' + lm.name; yOffset = 4; break;
-                case 'cave': label = '⬛ ' + lm.name; yOffset = 4; break;
-            }
-
-            ctx.strokeText(label, lx, ly + yOffset);
-            ctx.fillStyle = '#2a1a0a';
-            ctx.fillText(label, lx, ly + yOffset);
-        }
-        ctx.restore();
-    }
-
-    // ── Book-Style Rendering Methods ─────────────────────────────────
-
-    // _renderBookTerrainOverlay moved to ./worldmap/styles.ts
-
-    // _renderBookNaturalForests moved to ./worldmap/features/forests.ts
-    // as renderBookNaturalForests.
+    // ── Legacy heightmap / moisture methods ─────────────────────────
     //
-    // _renderBookForests (legacy grid) moved to the same file
-    // as renderBookForestGrid.
+    // _generateHeightMap and _generateMoistureMap have been removed.
+    // The class now uses generateAdvancedHeightMap() and
+    // generateAdvancedMoistureMap() from engine/terrain.ts, which
+    // run inside the generate() method directly.
 
-    // _renderBookMountains moved to ./worldmap/features/mountains.ts
-    // as renderBookMountainGrid.
-
-    // _renderBookCities moved to ./worldmap/features/cities.ts
-    // as renderBookCities.
-
-    // _generateCities, _renderCities, _renderRoads, _renderLabels and
-    // _renderTitle all moved to ./worldmap/features/cities.ts.
-
-    // ── Natural Rendering Methods (New Terrain Engine) ──────────────
-
-    // _renderRiverSystems moved to ./worldmap/features/rivers.ts
-
-    /**
-     * Render forests using Poisson disk sampling for natural spacing
-     * Trees cluster in moist areas and thin out in dry areas
-     */
-    // _renderNaturalForests moved to ./worldmap/features/forests.ts
-    // as renderNaturalForests.
-
-    // _renderMountainRidges and _renderBookMountainRidges moved to
-    // ./worldmap/features/mountains.ts as renderMountainRidges and
-    // renderBookMountainRidges respectively.
+    // ── Modules that own the real work ──────────────────────────────
+    //
+    // The class used to be ~1400 lines; since the W1-W7 refactor it's
+    // essentially just getControls(), generate() and a handful of
+    // cache refs. Everything else lives in its own focused module:
+    //
+    //   ./worldmap/styles.ts
+    //     Colored, parchment, Wonderdraft and book-overlay terrain
+    //     renderers. Exports renderColoredStyle, renderParchmentStyle,
+    //     renderWonderdraftStyle, renderBookTerrainOverlay,
+    //     drawContourLine.
+    //
+    //   ./worldmap/features/rivers.ts
+    //     generateSimpleRivers, renderSimpleRivers, renderRiverSystems,
+    //     riverColorForStyle.
+    //
+    //   ./worldmap/features/mountains.ts
+    //     renderMountainGrid, renderBookMountainGrid,
+    //     renderMountainRidges, renderBookMountainRidges.
+    //
+    //   ./worldmap/features/forests.ts
+    //     renderForestGrid, renderBookForestGrid,
+    //     renderNaturalForests, renderBookNaturalForests.
+    //
+    //   ./worldmap/features/cities.ts
+    //     generateCities, renderCities, renderBookCities,
+    //     renderRoads, renderLabels, renderTitle.
+    //
+    //   ./worldmap/lore.ts
+    //     renderLoreRegions, renderLoreRiverLabels,
+    //     renderLoreLandmarks.
 
 }
