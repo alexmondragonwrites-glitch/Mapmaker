@@ -644,54 +644,113 @@ export class CityMapGenerator {
     }
 
     _renderLandmarks(ctx, cfg, centerX, centerY, cityRadius, rng, names, districts) {
-        // Find temple district
-        const templeDistrict = districts.find(d => d.type === 'tempel');
-        if (templeDistrict) {
-            drawTemple(ctx, templeDistrict.x, templeDistrict.y, 22);
-        }
+        // Place a signature landmark at the geometric center of each
+        // district. This is in addition to the district-specific building
+        // mix from Package 2, and sits on top so it's always visible.
+        for (const district of districts) {
+            const { x, y, type } = district;
 
-        // Find market district - draw market square
-        const marketDistrict = districts.find(d => d.type === 'markt');
-        if (marketDistrict) {
-            ctx.fillStyle = PALETTES.city.plaza;
-            ctx.beginPath();
-            ctx.ellipse(marketDistrict.x, marketDistrict.y, 25, 20, 0, 0, Math.PI * 2);
-            ctx.fill();
+            switch (type) {
+                case 'markt': {
+                    // Central market plaza with fountain
+                    ctx.fillStyle = PALETTES.city.plaza;
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, 32, 26, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(80, 60, 30, 0.3)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    drawFountain(ctx, x, y, 20);
+                    break;
+                }
 
-            // Market stalls
-            for (let i = 0; i < 6; i++) {
-                const angle = (i / 6) * Math.PI * 2;
-                const sx = marketDistrict.x + Math.cos(angle) * 15;
-                const sy = marketDistrict.y + Math.sin(angle) * 12;
-                ctx.fillStyle = rng.pick(['#c4a44a', '#8b4513', '#6b4423']);
-                ctx.fillRect(sx - 3, sy - 3, 6, 6);
+                case 'tempel': {
+                    drawTemple(ctx, x, y, 28);
+                    // Ring of shrines around the main temple
+                    for (let i = 0; i < 4; i++) {
+                        const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+                        const sx = x + Math.cos(angle) * 34;
+                        const sy = y + Math.sin(angle) * 34;
+                        drawShrine(ctx, sx, sy, 12);
+                    }
+                    break;
+                }
+
+                case 'adel': {
+                    // Noble plaza: fountain flanked by statues
+                    ctx.fillStyle = 'rgba(192, 176, 140, 0.6)';
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, 30, 24, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    drawFountain(ctx, x, y, 22);
+                    drawStatue(ctx, x - 28, y, 14);
+                    drawStatue(ctx, x + 28, y, 14);
+                    break;
+                }
+
+                case 'garten': {
+                    // Garden: central fountain surrounded by trees
+                    drawFountain(ctx, x, y, 18);
+                    for (let i = 0; i < 10; i++) {
+                        const angle = rng.nextFloat(0, Math.PI * 2);
+                        const dist = rng.nextFloat(15, 35);
+                        drawTree(ctx, x + Math.cos(angle) * dist, y + Math.sin(angle) * dist, rng.nextFloat(7, 10));
+                    }
+                    break;
+                }
+
+                case 'handwerk': {
+                    // Anvil square: a well and a big forge as focal point
+                    drawForge(ctx, x, y, 22);
+                    drawWell(ctx, x - 30, y + 20, 14);
+                    break;
+                }
+
+                case 'hafen': {
+                    // Large warehouse at the center, tavern nearby
+                    drawWarehouse(ctx, x, y, 24);
+                    drawTavern(ctx, x + 34, y, 16);
+                    break;
+                }
+
+                case 'akademie': {
+                    // Academy: library flanked by tower and statue
+                    drawLibrary(ctx, x, y, 26);
+                    drawTower(ctx, x - 32, y, 18);
+                    drawStatue(ctx, x + 32, y + 8, 14);
+                    break;
+                }
+
+                case 'kaserne': {
+                    // Parade ground: main barracks with watch tower
+                    drawBarracks(ctx, x, y, 26);
+                    drawTower(ctx, x - 34, y - 10, 18);
+                    drawTower(ctx, x + 34, y - 10, 18);
+                    break;
+                }
+
+                case 'wohn': {
+                    // Simple neighborhood well
+                    drawWell(ctx, x, y, 16);
+                    break;
+                }
+
+                case 'armen': {
+                    // Shared communal well
+                    drawWell(ctx, x, y, 14);
+                    break;
+                }
             }
         }
 
-        // Taverns in various districts
-        const tavernCount = Math.min(3, districts.length);
-        for (let i = 0; i < tavernCount; i++) {
-            const d = districts[i];
-            const tx = d.x + rng.nextFloat(-d.radius * 0.3, d.radius * 0.3);
-            const ty = d.y + rng.nextFloat(-d.radius * 0.3, d.radius * 0.3);
-            drawTavern(ctx, tx, ty, 14);
-        }
-
-        // Garden district
-        const gardenDistrict = districts.find(d => d.type === 'garten');
-        if (gardenDistrict) {
-            ctx.fillStyle = PALETTES.city.garden;
-            ctx.globalAlpha = 0.4;
-            ctx.beginPath();
-            ctx.ellipse(gardenDistrict.x, gardenDistrict.y, 30, 25, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-
-            for (let i = 0; i < 8; i++) {
-                const angle = rng.nextFloat(0, Math.PI * 2);
-                const dist = rng.nextFloat(0, 20);
-                drawTree(ctx, gardenDistrict.x + Math.cos(angle) * dist, gardenDistrict.y + Math.sin(angle) * dist, 6);
-            }
+        // Windmills at the city edges (outside walls, pointing out of districts)
+        const windmillCount = cfg.citySize === 'metropolis' ? 3 : cfg.citySize === 'large' ? 2 : 1;
+        for (let i = 0; i < windmillCount; i++) {
+            const angle = rng.nextFloat(0, Math.PI * 2);
+            const d = cityRadius * 1.12;
+            const wx = centerX + Math.cos(angle) * d;
+            const wy = centerY + Math.sin(angle) * d;
+            drawWindmill(ctx, wx, wy, 20);
         }
     }
 
