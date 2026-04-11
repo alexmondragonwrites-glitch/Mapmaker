@@ -277,7 +277,7 @@ export class CityMapGenerator {
         }
 
         // Buildings per district
-        this._renderBuildings(ctx, cfg, districts, roads, riverPoints, centerX, centerY, cityRadius, rng, noise);
+        this._renderBuildings(ctx, cfg, districts, roads, riverPoints, outline, rng, noise);
 
         // Landmarks
         this._renderLandmarks(ctx, cfg, centerX, centerY, cityRadius, rng, names, districts);
@@ -891,65 +891,181 @@ export class CityMapGenerator {
         }
     }
 
-    _renderBuildings(ctx, cfg, districts, roads, riverPoints, centerX, centerY, cityRadius, rng, noise) {
+    /**
+     * Place buildings along the roads on both sides, so they front onto
+     * streets like real medieval towns. Each road segment spawns left and
+     * right candidates offset perpendicular to the road direction. The
+     * candidate's district is found by proximity, and the building type
+     * comes from that district's profile.
+     */
+    _renderBuildings(ctx, cfg, districts, roads, riverPoints, outline, rng, _noise) {
         const { buildingDensity, style } = cfg;
 
+        // Global placed list so buildings from different roads don't overlap
+        const placed: Array<{ x: number; y: number; r: number }> = [];
+
+        // Helper: find the district whose radius contains (x, y), or
+        // otherwise the nearest district within avgRadius * 0.8
+        const findDistrict = (x: number, y: number) => {
+            let best: any = null;
+            let bestScore = Infinity;
+            for (const d of districts) {
+                const dd = Math.hypot(x - d.x, y - d.y);
+                // Inside the district ring is best
+                if (dd <= d.radius) {
+                    const score = dd - d.radius; // more negative is better
+                    if (score < bestScore) { bestScore = score; best = d; }
+                } else if (bestScore === Infinity) {
+                    // Fallback: nearest by distance
+                    if (dd < best?.distance || !best) {
+                        best = d;
+                        best.distance = dd;
+                    }
+                }
+            }
+            return best;
+        };
+
+        // Helper: is (x, y) too close to any road segment?
+        const isOnRoad = (x: number, y: number, margin: number) => {
+            for (const road of roads) {
+                for (const pt of road.points) {
+                    if (Math.hypot(x - pt.x, y - pt.y) < margin) return true;
+                }
+            }
+            return false;
+        };
+
+        // Helper: is (x, y) in the river?
+        const isInRiver = (x: number, y: number, margin: number) => {
+            for (const pt of riverPoints) {
+                if (Math.hypot(x - pt.x, y - pt.y) < margin) return true;
+            }
+            return false;
+        };
+
+        // Walk each road. We sample points along the polyline at a fixed
+        // stride and try to place a building on each side.
+        for (const road of roads) {
+            // Only frontage roads - skip the plaza ring which is too tight
+            if (road.type === 'plaza') continue;
+
+            // How far out from the road centerline to place buildings
+            const offset = road.width / 2 + 9;
+
+            // Stride between building candidates along the road.
+            // Main roads can afford denser frontage than branches.
+            const stride = road.type === 'main' ? 14 : 12;
+
+            // Accumulated distance since last candidate
+            let acc = 0;
+            for (let i = 1; i < road.points.length; i++) {
+                const a = road.points[i - 1];
+                const b = road.points[i];
+                const segDx = b.x - a.x;
+                const segDy = b.y - a.y;
+                const segLen = Math.hypot(segDx, segDy);
+                if (segLen < 0.01) continue;
+
+                // Perpendicular unit vector
+                const px = -segDy / segLen;
+                const py = segDx / segLen;
+
+                acc += segLen;
+                while (acc >= stride) {
+                    acc -= stride;
+                    // Position along the segment at this stride
+                    const t = (stride - acc) / segLen;
+                    const cxOnRoad = a.x + segDx * (1 - t);
+                    const cyOnRoad = a.y + segDy * (1 - t);
+
+                    // Try both sides of the road
+                    for (const side of [+1, -1]) {
+                        // Perpendicular offset + small random jitter for irregularity
+                        const jitter = rng.nextFloat(-2, 2);
+                        const bx = cxOnRoad + px * side * offset + px * side * jitter;
+                        const by = cyOnRoad + py * side * offset + py * side * jitter;
+
+                        // Must be inside the city outline
+                        if (!outline.containsPoint(bx, by, 6)) continue;
+
+                        // Not on another road
+                        if (isOnRoad(bx, by, 6)) continue;
+
+                        // Not in the river
+                        if (isInRiver(bx, by, 12)) continue;
+
+                        // Spacing against already-placed buildings
+                        let tooClose = false;
+                        for (const p of placed) {
+                            if (Math.hypot(bx - p.x, by - p.y) < p.r) { tooClose = true; break; }
+                        }
+                        if (tooClose) continue;
+
+                        // Find which district owns this spot
+                        const district = findDistrict(bx, by);
+                        if (!district) continue;
+                        const profile = DISTRICT_PROFILES[district.type];
+                        if (!profile) continue;
+
+                        // Density gate: some spots are intentionally left empty
+                        // to avoid wall-to-wall solid blocks of houses
+                        if (rng.next() > buildingDensity * profile.density * 0.95) continue;
+
+                        // Pick a building from the district profile
+                        const entry = pickBuilding(profile, rng);
+                        const size = rng.nextFloat(entry.sizeMin, entry.sizeMax);
+
+                        // Culture style override for generic houses
+                        let drawFn = entry.draw;
+                        if (entry.draw === drawHumanHouse && style !== 'human') {
+                            const effective = style === 'mixed'
+                                ? rng.pick(['human', 'elven', 'dwarven'])
+                                : style;
+                            if (effective === 'elven')  drawFn = drawElvenHouse;
+                            if (effective === 'dwarven') drawFn = drawDwarvenHouse;
+                        }
+
+                        drawFn(ctx, bx, by, size);
+                        placed.push({ x: bx, y: by, r: profile.spacing });
+                    }
+                }
+            }
+        }
+
+        // Second pass: fill the remaining interior of each district with
+        // some background clutter (houses behind the main frontages), so
+        // we don't have big empty blocks between parallel roads.
         for (const district of districts) {
             const profile = DISTRICT_PROFILES[district.type];
             if (!profile) continue;
 
-            // Track placed buildings for spacing check
-            const placed: Array<{ x: number; y: number; r: number }> = [];
-
-            // Try to place buildings up to a target count based on area + density
+            // How much background infill: scales with density
             const area = Math.PI * district.radius * district.radius;
-            const targetCount = Math.floor((area / (profile.spacing * profile.spacing * 1.2)) * buildingDensity * profile.density);
+            const targetCount = Math.floor((area / (profile.spacing * profile.spacing * 3)) * buildingDensity * profile.density);
 
             let attempts = 0;
-            const maxAttempts = targetCount * 5;
-
-            while (placed.length < targetCount && attempts < maxAttempts) {
+            let placedThis = 0;
+            while (placedThis < targetCount && attempts < targetCount * 8) {
                 attempts++;
-
-                // Random position within district (biased toward center)
                 const angle = rng.nextFloat(0, Math.PI * 2);
-                const distFromCenter = Math.sqrt(rng.next()) * district.radius;
-                const bx = district.x + Math.cos(angle) * distFromCenter;
-                const by = district.y + Math.sin(angle) * distFromCenter;
+                const dist = Math.sqrt(rng.next()) * district.radius;
+                const bx = district.x + Math.cos(angle) * dist;
+                const by = district.y + Math.sin(angle) * dist;
 
-                // Skip if outside city
-                if (distance(bx, by, centerX, centerY) > cityRadius * 0.93) continue;
+                if (!outline.containsPoint(bx, by, 8)) continue;
+                if (isOnRoad(bx, by, 7)) continue;
+                if (isInRiver(bx, by, 14)) continue;
 
-                // Skip if on road
-                let onRoad = false;
-                for (const road of roads) {
-                    for (const pt of road.points) {
-                        if (distance(bx, by, pt.x, pt.y) < 7) { onRoad = true; break; }
-                    }
-                    if (onRoad) break;
-                }
-                if (onRoad) continue;
-
-                // Skip if in river
-                let inRiver = false;
-                for (const pt of riverPoints) {
-                    if (distance(bx, by, pt.x, pt.y) < 14) { inRiver = true; break; }
-                }
-                if (inRiver) continue;
-
-                // Skip if too close to another building in this district
                 let tooClose = false;
                 for (const p of placed) {
-                    if (distance(bx, by, p.x, p.y) < p.r) { tooClose = true; break; }
+                    if (Math.hypot(bx - p.x, by - p.y) < p.r) { tooClose = true; break; }
                 }
                 if (tooClose) continue;
 
-                // Pick a building from the district profile
                 const entry = pickBuilding(profile, rng);
                 const size = rng.nextFloat(entry.sizeMin, entry.sizeMax);
 
-                // For houses: optionally apply the player-chosen culture style
-                // (elven/dwarven houses override the default human house)
                 let drawFn = entry.draw;
                 if (entry.draw === drawHumanHouse && style !== 'human') {
                     const effective = style === 'mixed'
@@ -961,6 +1077,7 @@ export class CityMapGenerator {
 
                 drawFn(ctx, bx, by, size);
                 placed.push({ x: bx, y: by, r: profile.spacing });
+                placedThis++;
             }
         }
     }
