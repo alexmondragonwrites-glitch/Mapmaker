@@ -255,9 +255,10 @@ export class AssetStore {
     pickAsset(category: AssetCategory, seed: number): LoadedAsset | null {
         const list = this.cache.get(category);
         if (!list || list.length === 0) return null;
-        // Simple 32-bit hash of the seed for variant selection
-        const hash = Math.abs(Math.floor(seed)) * 2654435761;
-        const idx = hash % list.length;
+        // 32-bit mixing function, robust against negative and large seeds
+        const s = Math.floor(seed) | 0;
+        const h = (Math.imul(s ^ (s >>> 16), 2246822507) ^ Math.imul(s ^ (s >>> 13), 3266489909)) >>> 0;
+        const idx = h % list.length;
         return list[idx];
     }
 

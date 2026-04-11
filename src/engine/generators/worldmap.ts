@@ -573,7 +573,11 @@ export class WorldMapGenerator {
 
     _renderForests(ctx, cfg, heightMap, moistureMap, noise, rng) {
         const { width, height, seaLevel, mountainLevel, forestDensity } = cfg;
-        const treeSpacing = 12;
+        // When PNG assets are loaded, tree stamps are ~3x larger than the
+        // procedural icons, so we need a much wider spacing to avoid overlap.
+        const store = getAssetStore();
+        const hasTreeAssets = store.hasCategory('tree') || store.hasCategory('pine');
+        const treeSpacing = hasTreeAssets ? 28 : 12;
 
         for (let y = treeSpacing; y < height - treeSpacing; y += treeSpacing) {
             for (let x = treeSpacing; x < width - treeSpacing; x += treeSpacing) {
@@ -602,7 +606,10 @@ export class WorldMapGenerator {
 
     _renderMountainIcons(ctx, cfg, heightMap, rng) {
         const { width, height, mountainLevel } = cfg;
-        const spacing = 20;
+        // With PNG assets loaded, mountain stamps are much larger - space them out
+        const store = getAssetStore();
+        const hasMountainAssets = store.hasCategory('mountain');
+        const spacing = hasMountainAssets ? 56 : 20;
 
         for (let y = spacing; y < height - spacing; y += spacing) {
             for (let x = spacing; x < width - spacing; x += spacing) {
