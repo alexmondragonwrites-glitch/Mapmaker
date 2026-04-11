@@ -894,3 +894,95 @@ body {
     text-decoration: line-through;
 }
 
+/* ── Asset diagnostics (expandable category rows) ─────────────────── */
+
+.asset-diag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+}
+
+.asset-diag-row {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.asset-diag-row.expanded {
+    border-color: var(--accent);
+}
+
+.asset-diag-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.78em;
+    cursor: pointer;
+    text-align: left;
+}
+
+.asset-diag-head:hover {
+    background: rgba(196, 135, 58, 0.08);
+}
+
+.asset-diag-caret {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    width: 10px;
+}
+
+.asset-diag-name {
+    flex: 1;
+    text-transform: capitalize;
+}
+
+.asset-diag-count {
+    color: var(--accent);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85em;
+}
+
+.asset-diag-samples {
+    list-style: none;
+    padding: 4px 8px 8px 22px;
+    margin: 0;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.asset-diag-samples li {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    padding: 2px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.asset-diag-file {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+}
+
+.asset-diag-dim {
+    color: var(--accent);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.asset-diag-more {
+    font-style: italic;
+    justify-content: flex-start !important;
+}
+

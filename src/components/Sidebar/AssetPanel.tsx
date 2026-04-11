@@ -1,6 +1,44 @@
 import { useCallback, useState } from 'react';
 import type { PackRecord } from '../../engine/assets-runtime';
-import type { AssetSummary } from '../../hooks/useAssets';
+import type { AssetSummary, AssetDiagCategory } from '../../hooks/useAssets';
+
+/**
+ * One collapsible row in the category diagnostics list. Expands to
+ * show up to 5 sample filenames + pixel dimensions of the loaded PNGs
+ * so the user can verify classification and catch size outliers.
+ */
+function CategoryRow({ category, diag }: { category: string; diag: AssetDiagCategory }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className={`asset-diag-row ${open ? 'expanded' : ''}`}>
+            <button
+                className="asset-diag-head"
+                onClick={() => setOpen(o => !o)}
+            >
+                <span className="asset-diag-caret">{open ? '▾' : '▸'}</span>
+                <span className="asset-diag-name">{category}</span>
+                <span className="asset-diag-count">{diag.count}</span>
+            </button>
+            {open && (
+                <ul className="asset-diag-samples">
+                    {diag.samples.map((s, i) => (
+                        <li key={i}>
+                            <span className="asset-diag-file">{s.filename}</span>
+                            {s.width && s.height && (
+                                <span className="asset-diag-dim">{s.width}×{s.height}</span>
+                            )}
+                        </li>
+                    ))}
+                    {diag.count > diag.samples.length && (
+                        <li className="asset-diag-more">
+                            +{diag.count - diag.samples.length} weitere…
+                        </li>
+                    )}
+                </ul>
+            )}
+        </div>
+    );
+}
 
 interface AssetPanelProps {
     packs: PackRecord[];
@@ -121,17 +159,20 @@ export function AssetPanel({
                 </div>
             </section>
 
-            {/* Per-category counts, only shown when we have data */}
-            {Object.keys(summary.perCategory).length > 0 && (
+            {/* Per-category counts with expandable diagnostics */}
+            {Object.keys(summary.diagnostics).length > 0 && (
                 <section className="lore-section">
-                    <h3 className="lore-section-title">Nach Kategorie</h3>
-                    <div className="asset-category-list">
-                        {Object.entries(summary.perCategory).map(([cat, count]) => (
-                            <div key={cat} className="asset-category-row">
-                                <span className="asset-category-name">{cat}</span>
-                                <span className="asset-category-count">{count}</span>
-                            </div>
-                        ))}
+                    <h3 className="lore-section-title">Diagnose: Kategorien</h3>
+                    <div className="asset-intro">
+                        Klicke auf eine Kategorie, um Beispiel-Dateinamen zu sehen.
+                        So kannst du pruefen, ob die Assets richtig klassifiziert wurden.
+                    </div>
+                    <div className="asset-diag-list">
+                        {Object.entries(summary.diagnostics)
+                            .sort((a, b) => b[1].count - a[1].count)
+                            .map(([cat, diag]) => (
+                                <CategoryRow key={cat} category={cat} diag={diag} />
+                            ))}
                     </div>
                 </section>
             )}

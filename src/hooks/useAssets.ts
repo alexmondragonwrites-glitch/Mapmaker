@@ -3,11 +3,23 @@ import { getAssetStore, type PackRecord } from '../engine/assets-runtime';
 import { importDrop, type ImportResult } from '../engine/assets-runtime/importer';
 import { autoLoadDevAssets } from '../engine/assets-runtime/devAutoLoader';
 
+export interface AssetDiagSample {
+    filename: string;
+    width?: number;
+    height?: number;
+}
+
+export interface AssetDiagCategory {
+    count: number;
+    samples: AssetDiagSample[];
+}
+
 export interface AssetSummary {
     totalPacks: number;
     enabledPacks: number;
     totalAssets: number;
     perCategory: Record<string, number>;
+    diagnostics: Record<string, AssetDiagCategory>;
 }
 
 export function useAssets() {
@@ -18,6 +30,7 @@ export function useAssets() {
         enabledPacks: 0,
         totalAssets: 0,
         perCategory: {},
+        diagnostics: {},
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -36,6 +49,7 @@ export function useAssets() {
                 enabledPacks: list.filter(p => p.enabled).length,
                 totalAssets: store.totalCached(),
                 perCategory: store.cachedByCategory(),
+                diagnostics: store.diagnosticsByCategory(5),
             });
             setError(null);
         } catch (err: any) {

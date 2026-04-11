@@ -284,6 +284,28 @@ export class AssetStore {
         return out;
     }
 
+    /**
+     * Return up to N asset records per category for diagnostic display.
+     * Used by the AssetPanel to show "what actually got matched" - e.g.
+     * the user can verify that files labelled mountains/ really did end
+     * up in the mountain category instead of getting mis-classified.
+     */
+    diagnosticsByCategory(sampleSize = 3): Record<string, {
+        count: number;
+        samples: Array<{ filename: string; width?: number; height?: number }>;
+    }> {
+        const out: Record<string, { count: number; samples: Array<{ filename: string; width?: number; height?: number }> }> = {};
+        for (const [cat, list] of this.cache.entries()) {
+            const samples = list.slice(0, sampleSize).map(l => ({
+                filename: l.record.filename,
+                width: l.record.width,
+                height: l.record.height,
+            }));
+            out[cat] = { count: list.length, samples };
+        }
+        return out;
+    }
+
     // ── Cache invalidation ──────────────────────────────────────────
 
     private invalidateCache(): void {
