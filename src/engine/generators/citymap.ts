@@ -255,8 +255,8 @@ export class CityMapGenerator {
             this._renderRiver(ctx, cfg, riverPoints);
         }
 
-        // Generate districts using Voronoi-like regions
-        const districts = this._generateDistricts(cfg, rng, names, centerX, centerY, cityRadius);
+        // Generate districts organically inside the outline (Package C)
+        const districts = this._generateDistricts(cfg, rng, names, outline, riverPoints);
 
         // District ground tinting (under walls and roads)
         this._renderDistrictGrounds(ctx, districts);
@@ -388,10 +388,16 @@ export class CityMapGenerator {
         ctx.restore();
     }
 
-    _generateDistricts(cfg, rng, names, centerX, centerY, cityRadius) {
-        const districts = [];
+    /**
+     * Place districts organically inside the city outline, respecting
+     * semantic placement rules (harbor near river, barracks near an
+     * edge, market near the heart, etc.) and enforcing Poisson-like
+     * minimum spacing so districts don't overlap.
+     */
+    _generateDistricts(cfg, rng, _names, outline, riverPoints) {
+        const districts: Array<any> = [];
         const districtTypes = ['markt', 'wohn', 'handwerk', 'adel', 'hafen', 'tempel', 'garten', 'armen', 'akademie', 'kaserne'];
-        const districtNames = {
+        const districtNames: Record<string, string> = {
             markt: 'Marktviertel', wohn: 'Wohnviertel', handwerk: 'Handwerkerviertel',
             adel: 'Adelsviertel', hafen: 'Hafenviertel', tempel: 'Tempelviertel',
             garten: 'Gartenviertel', armen: 'Armenviertel', akademie: 'Akademieviertel',
@@ -399,19 +405,111 @@ export class CityMapGenerator {
         };
 
         const count = Math.min(cfg.districtCount, districtTypes.length);
-        const shuffled = rng.shuffle(districtTypes).slice(0, count);
 
-        const angleStep = (Math.PI * 2) / count;
-        for (let i = 0; i < count; i++) {
-            const angle = angleStep * i + rng.nextFloat(-0.3, 0.3);
-            const dist = cityRadius * rng.nextFloat(0.2, 0.55);
+        // Always try to include key districts first, then fill with random ones.
+        // Market is the anchor and almost always appears.
+        const priority = ['markt', 'tempel', 'wohn', 'handwerk', 'hafen', 'adel', 'kaserne', 'akademie', 'garten', 'armen'];
+        const chosen = priority.slice(0, count);
+
+        const cx = outline.cx;
+        const cy = outline.cy;
+        const avgR = outline.avgRadius;
+
+        // Semantic placement preferences per district type:
+        //   centerBias: how strongly this district is pulled toward the city heart
+        //   edgeBias: how strongly it's pushed toward the outer walls
+        //   riverBias: how strongly it wants to be near the river (if any)
+        const prefs: Record<string, { centerBias: number; edgeBias: number; riverBias: number }> = {
+            markt:    { centerBias: 0.9, edgeBias: 0.0, riverBias: 0.0 },
+            tempel:   { centerBias: 0.6, edgeBias: 0.0, riverBias: 0.0 },
+            adel:     { centerBias: 0.7, edgeBias: 0.0, riverBias: 0.0 },
+            akademie: { centerBias: 0.5, edgeBias: 0.0, riverBias: 0.0 },
+            wohn:     { centerBias: 0.2, edgeBias: 0.2, riverBias: 0.0 },
+            handwerk: { centerBias: 0.1, edgeBias: 0.3, riverBias: 0.2 },
+            hafen:    { centerBias: 0.0, edgeBias: 0.6, riverBias: 1.0 },
+            armen:    { centerBias: 0.0, edgeBias: 0.7, riverBias: 0.0 },
+            kaserne:  { centerBias: 0.0, edgeBias: 0.8, riverBias: 0.0 },
+            garten:   { centerBias: 0.1, edgeBias: 0.4, riverBias: 0.0 },
+        };
+
+        for (const type of chosen) {
+            const p = prefs[type] || { centerBias: 0.4, edgeBias: 0.3, riverBias: 0 };
+
+            // Try many candidate positions and pick the best according to
+            // semantic preferences plus spacing from other districts.
+            let bestX = cx;
+            let bestY = cy;
+            let bestScore = -Infinity;
+
+            for (let attempt = 0; attempt < 60; attempt++) {
+                // Sample a point inside the outline using polar coordinates
+                const angle = rng.nextFloat(0, Math.PI * 2);
+                // Distance from center biased by district preference
+                const maxR = outline.radiusAt(angle) * 0.85;
+                // t=0 -> center, t=1 -> edge
+                let t;
+                if (p.centerBias > p.edgeBias) {
+                    // Favor center: square root biases toward small values
+                    t = rng.nextFloat(0, 1) * rng.nextFloat(0, 1);
+                } else {
+                    // Favor edge: square biases toward large values
+                    t = Math.sqrt(rng.nextFloat(0, 1));
+                }
+                const dist = t * maxR;
+                const x = cx + Math.cos(angle) * dist;
+                const y = cy + Math.sin(angle) * dist;
+
+                // Score: start neutral, add/subtract based on preferences
+                let score = 0;
+
+                // Center preference
+                const centerDist = Math.hypot(x - cx, y - cy);
+                score += (1 - centerDist / avgR) * p.centerBias * 10;
+                // Edge preference
+                score += (centerDist / avgR) * p.edgeBias * 10;
+
+                // River preference: distance to the nearest river point
+                if (p.riverBias > 0 && riverPoints.length > 0) {
+                    let minRiverDist = Infinity;
+                    for (const rp of riverPoints) {
+                        const d = Math.hypot(x - rp.x, y - rp.y);
+                        if (d < minRiverDist) minRiverDist = d;
+                    }
+                    // Close to river = good
+                    const normalized = Math.min(1, minRiverDist / avgR);
+                    score += (1 - normalized) * p.riverBias * 12;
+                }
+
+                // Spacing: penalize being too close to existing districts
+                let tooClose = false;
+                for (const d of districts) {
+                    const dd = Math.hypot(x - d.x, y - d.y);
+                    const minSpacing = d.radius + avgR * 0.15;
+                    if (dd < minSpacing) { tooClose = true; break; }
+                    // Soft penalty: prefer spacing of avgR * 0.3
+                    if (dd < avgR * 0.3) score -= (avgR * 0.3 - dd) * 0.5;
+                }
+                if (tooClose) continue;
+
+                // Small random component so ties break randomly
+                score += rng.nextFloat(0, 2);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestX = x;
+                    bestY = y;
+                }
+            }
+
+            // Always place the district even if no ideal spot was found
+            const radius = avgR * rng.nextFloat(0.18, 0.28);
             districts.push({
-                x: centerX + Math.cos(angle) * dist,
-                y: centerY + Math.sin(angle) * dist,
-                type: shuffled[i],
-                name: districtNames[shuffled[i]],
-                radius: cityRadius * rng.nextFloat(0.2, 0.35),
-                angle,
+                x: bestX,
+                y: bestY,
+                type,
+                name: districtNames[type],
+                radius,
+                angle: Math.atan2(bestY - cy, bestX - cx),
             });
         }
 
