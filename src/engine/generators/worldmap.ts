@@ -46,6 +46,14 @@ import {
     renderNaturalForests,
     renderBookNaturalForests,
 } from './worldmap/features/forests';
+import {
+    generateCities,
+    renderCities,
+    renderBookCities,
+    renderRoads,
+    renderLabels,
+    renderTitle,
+} from './worldmap/features/cities';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -268,21 +276,21 @@ export class WorldMapGenerator {
         }
 
         // Generate cities - use lore cities if available
-        const cities = this._generateCities(cfg, heightMap, rivers, rng, names, loreHints);
+        const cities = generateCities(cfg, heightMap, rivers, rng, names, loreHints);
 
         // Render roads between cities (use lore roads if available)
-        this._renderRoads(ctx, cfg, cities, heightMap, loreHints);
+        renderRoads(ctx, cfg, cities, heightMap, loreHints);
 
         // Render cities (book style or normal)
         if (isBook) {
-            this._renderBookCities(ctx, cfg, cities);
+            renderBookCities(ctx, cfg, cities);
         } else {
-            this._renderCities(ctx, cfg, cities);
+            renderCities(ctx, cfg, cities);
         }
 
         // Labels
         if (cfg.showLabels) {
-            this._renderLabels(ctx, cfg, cities, rivers, names, rng);
+            renderLabels(ctx, cfg, cities, rivers, names, rng);
         }
 
         // Decorations (book style uses dedicated ornate versions)
@@ -306,7 +314,7 @@ export class WorldMapGenerator {
                 fontSize: Math.max(20, cfg.width * 0.022),
             });
         } else {
-            this._renderTitle(ctx, cfg, names, loreHints);
+            renderTitle(ctx, cfg, names, loreHints);
         }
 
         // ── Cloud/fog wisps at edges (all styles) ──
@@ -464,305 +472,6 @@ export class WorldMapGenerator {
     // the function is still exported for anyone who wants the old
     // grid behaviour).
 
-    _generateCities(cfg, heightMap, rivers, rng, names, loreHints) {
-        const { width, height, seaLevel, mountainLevel, cityCount } = cfg;
-        const cities = [];
-
-        // First: place lore cities at their specified positions
-        if (loreHints && loreHints.cities.length > 0) {
-            for (const loreCity of loreHints.cities) {
-                let cx, cy;
-
-                if (loreCity.relX !== null && loreCity.relY !== null) {
-                    // Use specified relative position
-                    cx = Math.floor(loreCity.relX * width);
-                    cy = Math.floor(loreCity.relY * height);
-                } else if (loreCity.regionId) {
-                    // Place near region center
-                    const region = loreHints.regions.find(r => r.id === loreCity.regionId);
-                    if (region) {
-                        cx = Math.floor(region.relX * width + rng.nextFloat(-40, 40));
-                        cy = Math.floor(region.relY * height + rng.nextFloat(-40, 40));
-                    } else {
-                        cx = rng.nextInt(width * 0.1, width * 0.9);
-                        cy = rng.nextInt(height * 0.1, height * 0.9);
-                    }
-                } else {
-                    // Find a good land position
-                    cx = rng.nextInt(width * 0.1, width * 0.9);
-                    cy = rng.nextInt(height * 0.1, height * 0.9);
-                    for (let attempt = 0; attempt < 50; attempt++) {
-                        const h = heightMap[cy * width + cx];
-                        if (h > seaLevel + 0.02 && h < mountainLevel * 0.85) break;
-                        cx = rng.nextInt(width * 0.1, width * 0.9);
-                        cy = rng.nextInt(height * 0.1, height * 0.9);
-                    }
-                }
-
-                // Clamp to canvas
-                cx = clamp(cx, 10, width - 10);
-                cy = clamp(cy, 10, height - 10);
-
-                // Snap to land if possible
-                const h = heightMap[clamp(cy, 0, height - 1) * width + clamp(cx, 0, width - 1)];
-                if (h < seaLevel) {
-                    // Search nearby for land
-                    for (let r = 5; r < 60; r += 5) {
-                        for (let a = 0; a < Math.PI * 2; a += 0.5) {
-                            const nx = clamp(Math.floor(cx + Math.cos(a) * r), 0, width - 1);
-                            const ny = clamp(Math.floor(cy + Math.sin(a) * r), 0, height - 1);
-                            if (heightMap[ny * width + nx] > seaLevel + 0.02) {
-                                cx = nx;
-                                cy = ny;
-                                r = 999; // break outer
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                const sizeMap = { village: 'small', town: 'small', city: 'medium', metropolis: 'large', capital: 'large' };
-                cities.push({
-                    x: cx,
-                    y: cy,
-                    name: loreCity.name,
-                    size: sizeMap[loreCity.size] || 'medium',
-                    style: loreCity.style || 'human',
-                    isCapital: loreCity.isCapital || false,
-                    loreId: loreCity.id,
-                    description: loreCity.description,
-                    fromLore: true,
-                });
-            }
-        }
-
-        // Then: fill remaining slots with procedural cities
-        const remainingCount = Math.max(0, cityCount - cities.length);
-        for (let i = 0; i < remainingCount; i++) {
-            let bestX = 0, bestY = 0, bestScore = -Infinity;
-
-            for (let attempt = 0; attempt < 100; attempt++) {
-                const x = rng.nextInt(width * 0.08, width * 0.92);
-                const y = rng.nextInt(height * 0.08, height * 0.92);
-                const h = heightMap[y * width + x];
-
-                if (h < seaLevel + 0.02 || h > mountainLevel * 0.85) continue;
-
-                let score = 0;
-
-                // Coastal bonus
-                for (let dy = -15; dy <= 15; dy += 5) {
-                    for (let dx = -15; dx <= 15; dx += 5) {
-                        const nx = clamp(x + dx, 0, width - 1);
-                        const ny = clamp(y + dy, 0, height - 1);
-                        if (heightMap[ny * width + nx] < seaLevel) score += 2;
-                    }
-                }
-
-                // River proximity bonus
-                for (const river of rivers) {
-                    for (const pt of river) {
-                        const d = distance(x, y, pt.x, pt.y);
-                        if (d < 30) score += 5;
-                    }
-                }
-
-                // Distance from ALL cities (including lore cities)
-                let minCityDist = Infinity;
-                for (const city of cities) {
-                    const d = distance(x, y, city.x, city.y);
-                    minCityDist = Math.min(minCityDist, d);
-                }
-                if (minCityDist < 80) score -= 100;
-                else score += Math.min(minCityDist * 0.1, 20);
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestX = x;
-                    bestY = y;
-                }
-            }
-
-            if (bestScore > -50) {
-                const isCapital = cities.length === 0 && i === 0;
-                cities.push({
-                    x: bestX,
-                    y: bestY,
-                    name: names.generate('city'),
-                    size: isCapital ? 'large' : (rng.next() > 0.6 ? 'medium' : 'small'),
-                    isCapital,
-                    fromLore: false,
-                });
-            }
-        }
-
-        return cities;
-    }
-
-    _renderCities(ctx, cfg, cities) {
-        for (const city of cities) {
-            if (city.isCapital || city.size === 'large') {
-                const variantSeed = (city.x * 2654435761) ^ (city.y * 1597334677);
-                drawCastleSmart(ctx, city.x, city.y, 18, variantSeed);
-            } else {
-                const s = city.size === 'medium' ? 6 : 4;
-                ctx.fillStyle = '#2a1a0a';
-                ctx.beginPath();
-                ctx.arc(city.x, city.y, s, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.strokeStyle = '#f4e4c1';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-            }
-        }
-    }
-
-    _renderRoads(ctx, cfg, cities, heightMap, loreHints) {
-        if (cities.length < 2) return;
-
-        const isBook = cfg.mapStyle === 'book';
-        ctx.strokeStyle = isBook ? 'rgba(35, 25, 15, 0.45)' :
-            cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
-        ctx.lineWidth = isBook ? 1 : 1.5;
-        ctx.setLineDash(isBook ? [3, 5] : [4, 4]);
-
-        // Draw lore-defined roads first (thicker, with names)
-        if (loreHints && loreHints.roads.length > 0) {
-            ctx.save();
-            ctx.lineWidth = isBook ? 1.5 : 2.5;
-            ctx.setLineDash(isBook ? [4, 4] : [6, 3]);
-            ctx.strokeStyle = isBook ? 'rgba(35, 25, 15, 0.5)' :
-                cfg.mapStyle === 'parchment' ? '#6a5a4a' : '#7a6a4a';
-
-            for (const road of loreHints.roads) {
-                const fromCity = cities.find(c => c.loreId === road.fromCityId || c.name === road.fromCityId);
-                const toCity = cities.find(c => c.loreId === road.toCityId || c.name === road.toCityId);
-                if (!fromCity || !toCity) continue;
-
-                ctx.beginPath();
-                ctx.moveTo(fromCity.x, fromCity.y);
-                const midX = (fromCity.x + toCity.x) / 2 + (Math.random() - 0.5) * 30;
-                const midY = (fromCity.y + toCity.y) / 2 + (Math.random() - 0.5) * 30;
-                ctx.quadraticCurveTo(midX, midY, toCity.x, toCity.y);
-                ctx.stroke();
-
-                // Road name label
-                if (road.name) {
-                    ctx.save();
-                    ctx.font = 'italic 8px "Palatino Linotype", serif';
-                    ctx.fillStyle = cfg.mapStyle === 'parchment' ? '#5a4a3a' : '#6a5a3a';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(road.name, midX, midY - 6);
-                    ctx.restore();
-                }
-            }
-            ctx.restore();
-
-            ctx.strokeStyle = cfg.mapStyle === 'parchment' ? PALETTES.parchment.road : '#8a7a5a';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([4, 4]);
-        }
-
-        // Connect nearby cities
-        for (let i = 0; i < cities.length; i++) {
-            let closest = null;
-            let closestDist = Infinity;
-
-            for (let j = 0; j < cities.length; j++) {
-                if (i === j) continue;
-                const d = distance(cities[i].x, cities[i].y, cities[j].x, cities[j].y);
-                if (d < closestDist && d < cfg.width * 0.35) {
-                    closestDist = d;
-                    closest = cities[j];
-                }
-            }
-
-            if (closest) {
-                ctx.beginPath();
-                ctx.moveTo(cities[i].x, cities[i].y);
-                // Slight curve
-                const midX = (cities[i].x + closest.x) / 2 + (Math.random() - 0.5) * 20;
-                const midY = (cities[i].y + closest.y) / 2 + (Math.random() - 0.5) * 20;
-                ctx.quadraticCurveTo(midX, midY, closest.x, closest.y);
-                ctx.stroke();
-            }
-        }
-
-        ctx.setLineDash([]);
-    }
-
-    _renderLabels(ctx, cfg, cities, rivers, names, rng) {
-        const isBook = cfg.mapStyle === 'book';
-        const isParchment = cfg.mapStyle === 'parchment' || isBook;
-        const textColor = isParchment ? 'rgba(35, 25, 15, 0.9)' : '#1a1a1a';
-        const shadowColor = isBook ? 'transparent' : (isParchment ? 'transparent' : 'rgba(255,255,255,0.7)');
-
-        // City labels
-        for (const city of cities) {
-            const fontSize = city.isCapital ? 14 : (city.size === 'medium' ? 11 : 9);
-            ctx.font = `${city.isCapital ? 'bold ' : ''}${fontSize}px "Palatino Linotype", "Book Antiqua", Palatino, serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-
-            if (shadowColor !== 'transparent') {
-                ctx.strokeStyle = shadowColor;
-                ctx.lineWidth = 3;
-                ctx.strokeText(city.name, city.x, city.y + (city.isCapital ? 14 : 8));
-            }
-
-            ctx.fillStyle = textColor;
-            ctx.fillText(city.name, city.x, city.y + (city.isCapital ? 14 : 8));
-        }
-
-        // River labels
-        for (const river of rivers) {
-            if (river.length < 10) continue;
-            const midIdx = Math.floor(river.length * 0.4);
-            const pt = river[midIdx];
-            const riverName = names.generate('river');
-
-            ctx.save();
-            ctx.font = 'italic 9px "Palatino Linotype", serif';
-            ctx.fillStyle = isParchment ? PALETTES.parchment.water : '#2a5a8a';
-            ctx.textAlign = 'center';
-
-            // Calculate angle
-            const nextPt = river[Math.min(midIdx + 3, river.length - 1)];
-            const angle = Math.atan2(nextPt.y - pt.y, nextPt.x - pt.x);
-            ctx.translate(pt.x, pt.y);
-            ctx.rotate(angle);
-            ctx.fillText(riverName, 0, -5);
-            ctx.restore();
-        }
-    }
-
-    _renderTitle(ctx, cfg, names, loreHints) {
-        const title = loreHints?.worldName || 'Calyndra';
-        const subtitle = loreHints?.worldDescription
-            ? `~ ${loreHints.worldDescription.slice(0, 60)}${loreHints.worldDescription.length > 60 ? '...' : ''} ~`
-            : '~ Eine Fantasywelt ~';
-        const fontSize = Math.max(20, cfg.width * 0.025);
-
-        ctx.font = `bold ${fontSize}px "Palatino Linotype", "Book Antiqua", Palatino, serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-
-        const x = cfg.width / 2;
-        const y = cfg.height * 0.02 + 15;
-
-        // Shadow
-        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-        ctx.lineWidth = 4;
-        ctx.strokeText(title, x, y);
-
-        // Text
-        ctx.fillStyle = cfg.mapStyle === 'parchment' ? PALETTES.parchment.ink : '#1a1a0a';
-        ctx.fillText(title, x, y);
-
-        // Subtitle
-        ctx.font = `italic ${fontSize * 0.5}px "Palatino Linotype", serif`;
-        ctx.fillText(subtitle, x, y + fontSize + 4);
-    }
 
     // ── Lore Rendering Methods ──────────────────────────────────────
 
@@ -875,14 +584,11 @@ export class WorldMapGenerator {
     // _renderBookMountains moved to ./worldmap/features/mountains.ts
     // as renderBookMountainGrid.
 
-    _renderBookCities(ctx, cfg, cities) {
-        for (const city of cities) {
-            const size = city.isCapital || city.size === 'large' ? 16 : (city.size === 'medium' ? 11 : 8);
-            drawBookCity(ctx, city.x, city.y, size, {
-                isCapital: city.isCapital || city.size === 'large',
-            });
-        }
-    }
+    // _renderBookCities moved to ./worldmap/features/cities.ts
+    // as renderBookCities.
+
+    // _generateCities, _renderCities, _renderRoads, _renderLabels and
+    // _renderTitle all moved to ./worldmap/features/cities.ts.
 
     // ── Natural Rendering Methods (New Terrain Engine) ──────────────
 
