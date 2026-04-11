@@ -34,6 +34,12 @@ import {
     renderSimpleRivers,
     renderRiverSystems,
 } from './worldmap/features/rivers';
+import {
+    renderMountainGrid,
+    renderBookMountainGrid,
+    renderMountainRidges,
+    renderBookMountainRidges,
+} from './worldmap/features/mountains';
 
 // Lore and Zoom are optional - loaded dynamically when available
 let _loreManager = null;
@@ -245,9 +251,9 @@ export class WorldMapGenerator {
         // Generate and render mountains along ridges (not random grid)
         const ridgePoints = findMountainRidges(cfg.width, cfg.height, heightMap, cfg.mountainLevel, rng);
         if (isBook) {
-            this._renderBookMountainRidges(ctx, cfg, ridgePoints, rng);
+            renderBookMountainRidges(ctx, cfg, ridgePoints, rng);
         } else {
-            this._renderMountainRidges(ctx, cfg, ridgePoints, rng);
+            renderMountainRidges(ctx, cfg, ridgePoints, rng);
         }
 
         // Render lore landmarks (named mountains, forests, etc.)
@@ -477,32 +483,11 @@ export class WorldMapGenerator {
         }
     }
 
-    _renderMountainIcons(ctx, cfg, heightMap, rng) {
-        const { width, height, mountainLevel } = cfg;
-        // With PNG assets loaded, mountain stamps are much larger - space them out
-        const store = getAssetStore();
-        const hasMountainAssets = store.hasCategory('mountain');
-        const spacing = hasMountainAssets ? 56 : 20;
-
-        for (let y = spacing; y < height - spacing; y += spacing) {
-            for (let x = spacing; x < width - spacing; x += spacing) {
-                const h = heightMap[y * width + x];
-                if (h < mountainLevel) continue;
-
-                const offsetX = rng.nextFloat(-5, 5);
-                const offsetY = rng.nextFloat(-5, 5);
-                const size = 12 + (h - mountainLevel) * 40;
-                const variantSeed = (x * 83492791) ^ (y * 12996221);
-
-                // Small chance of volcano
-                if (h > mountainLevel + 0.15 && rng.next() > 0.92) {
-                    drawVolcanoSmart(ctx, x + offsetX, y + offsetY, size * 1.3, {}, variantSeed);
-                } else {
-                    drawMountainSmart(ctx, x + offsetX, y + offsetY, size, { snow: h > 0.78 }, variantSeed);
-                }
-            }
-        }
-    }
+    // _renderMountainIcons moved to ./worldmap/features/mountains.ts
+    // as renderMountainGrid (kept as a fallback - the class doesn't
+    // call it anymore because renderMountainRidges reads better, but
+    // the function is still exported for anyone who wants the old
+    // grid behaviour).
 
     _generateCities(cfg, heightMap, rivers, rng, names, loreHints) {
         const { width, height, seaLevel, mountainLevel, cityCount } = cfg;
@@ -960,25 +945,8 @@ export class WorldMapGenerator {
         }
     }
 
-    _renderBookMountains(ctx, cfg, heightMap, rng) {
-        const { width, height, mountainLevel } = cfg;
-        const spacing = 18;
-
-        for (let y = spacing; y < height - spacing; y += spacing) {
-            for (let x = spacing; x < width - spacing; x += spacing) {
-                const h = heightMap[y * width + x];
-                if (h < mountainLevel) continue;
-
-                const offsetX = rng.nextFloat(-4, 4);
-                const offsetY = rng.nextFloat(-4, 4);
-                const size = 14 + (h - mountainLevel) * 50;
-
-                drawBookMountain(ctx, x + offsetX, y + offsetY, size, {
-                    snow: h > 0.78,
-                });
-            }
-        }
-    }
+    // _renderBookMountains moved to ./worldmap/features/mountains.ts
+    // as renderBookMountainGrid.
 
     _renderBookCities(ctx, cfg, cities) {
         for (const city of cities) {
@@ -1038,28 +1006,8 @@ export class WorldMapGenerator {
         }
     }
 
-    /**
-     * Render mountains along detected ridges (connected ranges)
-     */
-    _renderMountainRidges(ctx, cfg, ridgePoints, rng) {
-        for (const pt of ridgePoints) {
-            const variantSeed = (Math.floor(pt.x) * 83492791) ^ (Math.floor(pt.y) * 12996221);
-            // Small chance of volcano on highest peaks
-            if (pt.isPeak && pt.height > cfg.mountainLevel + 0.18 && rng.next() > 0.9) {
-                drawVolcanoSmart(ctx, pt.x, pt.y, pt.size * 1.2, {}, variantSeed);
-            } else {
-                drawMountainSmart(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 }, variantSeed);
-            }
-        }
-    }
-
-    /**
-     * Render book-style mountains along ridges
-     */
-    _renderBookMountainRidges(ctx, cfg, ridgePoints, rng) {
-        for (const pt of ridgePoints) {
-            drawBookMountain(ctx, pt.x, pt.y, pt.size, { snow: pt.height > 0.78 });
-        }
-    }
+    // _renderMountainRidges and _renderBookMountainRidges moved to
+    // ./worldmap/features/mountains.ts as renderMountainRidges and
+    // renderBookMountainRidges respectively.
 
 }
