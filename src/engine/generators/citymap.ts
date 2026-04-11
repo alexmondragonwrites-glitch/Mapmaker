@@ -536,28 +536,38 @@ export class CityMapGenerator {
 
     _renderBuildings(ctx, cfg, districts, roads, riverPoints, centerX, centerY, cityRadius, rng, noise) {
         const { buildingDensity, style } = cfg;
-        const spacing = style === 'elven' ? 18 : 12;
 
         for (const district of districts) {
-            const buildingCount = Math.floor((district.radius * 2 / spacing) ** 2 * buildingDensity);
+            const profile = DISTRICT_PROFILES[district.type];
+            if (!profile) continue;
 
-            for (let i = 0; i < buildingCount; i++) {
+            // Track placed buildings for spacing check
+            const placed: Array<{ x: number; y: number; r: number }> = [];
+
+            // Try to place buildings up to a target count based on area + density
+            const area = Math.PI * district.radius * district.radius;
+            const targetCount = Math.floor((area / (profile.spacing * profile.spacing * 1.2)) * buildingDensity * profile.density);
+
+            let attempts = 0;
+            const maxAttempts = targetCount * 5;
+
+            while (placed.length < targetCount && attempts < maxAttempts) {
+                attempts++;
+
+                // Random position within district (biased toward center)
                 const angle = rng.nextFloat(0, Math.PI * 2);
-                const dist = rng.nextFloat(0, district.radius);
-                const bx = district.x + Math.cos(angle) * dist;
-                const by = district.y + Math.sin(angle) * dist;
+                const distFromCenter = Math.sqrt(rng.next()) * district.radius;
+                const bx = district.x + Math.cos(angle) * distFromCenter;
+                const by = district.y + Math.sin(angle) * distFromCenter;
 
                 // Skip if outside city
-                if (distance(bx, by, centerX, centerY) > cityRadius * 0.95) continue;
+                if (distance(bx, by, centerX, centerY) > cityRadius * 0.93) continue;
 
                 // Skip if on road
                 let onRoad = false;
                 for (const road of roads) {
                     for (const pt of road.points) {
-                        if (distance(bx, by, pt.x, pt.y) < 8) {
-                            onRoad = true;
-                            break;
-                        }
+                        if (distance(bx, by, pt.x, pt.y) < 7) { onRoad = true; break; }
                     }
                     if (onRoad) break;
                 }
@@ -566,26 +576,34 @@ export class CityMapGenerator {
                 // Skip if in river
                 let inRiver = false;
                 for (const pt of riverPoints) {
-                    if (distance(bx, by, pt.x, pt.y) < 15) {
-                        inRiver = true;
-                        break;
-                    }
+                    if (distance(bx, by, pt.x, pt.y) < 14) { inRiver = true; break; }
                 }
                 if (inRiver) continue;
 
-                const buildingSize = rng.nextFloat(8, 14);
-                const buildingStyle = style === 'mixed' ? rng.pick(['human', 'elven', 'dwarven']) : style;
-
-                switch (buildingStyle) {
-                    case 'elven':
-                        drawElvenHouse(ctx, bx, by, buildingSize);
-                        break;
-                    case 'dwarven':
-                        drawDwarvenHouse(ctx, bx, by, buildingSize);
-                        break;
-                    default:
-                        drawHumanHouse(ctx, bx, by, buildingSize);
+                // Skip if too close to another building in this district
+                let tooClose = false;
+                for (const p of placed) {
+                    if (distance(bx, by, p.x, p.y) < p.r) { tooClose = true; break; }
                 }
+                if (tooClose) continue;
+
+                // Pick a building from the district profile
+                const entry = pickBuilding(profile, rng);
+                const size = rng.nextFloat(entry.sizeMin, entry.sizeMax);
+
+                // For houses: optionally apply the player-chosen culture style
+                // (elven/dwarven houses override the default human house)
+                let drawFn = entry.draw;
+                if (entry.draw === drawHumanHouse && style !== 'human') {
+                    const effective = style === 'mixed'
+                        ? rng.pick(['human', 'elven', 'dwarven'])
+                        : style;
+                    if (effective === 'elven')  drawFn = drawElvenHouse;
+                    if (effective === 'dwarven') drawFn = drawDwarvenHouse;
+                }
+
+                drawFn(ctx, bx, by, size);
+                placed.push({ x: bx, y: by, r: profile.spacing });
             }
         }
     }
