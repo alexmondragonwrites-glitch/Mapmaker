@@ -182,6 +182,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     // Capture click before the native canvas click handler from
     // useZoom runs. If the user just panned, swallow this click.
     const handleClickCapture = useCallback((e: RMouseEvent<HTMLDivElement>) => {
+        // eslint-disable-next-line no-console
+        console.log('[MapCanvas.handleClickCapture] fired', { suppress: suppressClickRef.current });
         if (!suppressClickRef.current) return;
         suppressClickRef.current = false;
         e.preventDefault();

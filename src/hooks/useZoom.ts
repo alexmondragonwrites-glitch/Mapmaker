@@ -189,6 +189,8 @@ export function useZoom(): UseZoomResult {
     // ── Actions ────────────────────────────────────────────────────
 
     const zoomIn = useCallback((nextLevel: ZoomLevel, nextData: ZoomTargetData) => {
+        // eslint-disable-next-line no-console
+        console.log('[useZoom.zoomIn] called', { nextLevel, nextData });
         // Read level/data from refs so this callback stays stable
         // across renders (needed for useZoom's return object to
         // retain a stable identity).
@@ -236,6 +238,8 @@ export function useZoom(): UseZoomResult {
 
     useEffect(() => {
         const canvas = canvasRef.current;
+        // eslint-disable-next-line no-console
+        console.log('[useZoom.bindEffect] running', { hasCanvas: !!canvas });
         if (!canvas) return;
 
         const isPointInArea = (px: number, py: number, area: ClickableArea) => {
@@ -317,15 +321,23 @@ export function useZoom(): UseZoomResult {
         };
 
         const handleClick = (e: MouseEvent) => {
+            // eslint-disable-next-line no-console
+            console.log('[useZoom.handleClick] fired', { areasCount: areasRef.current.length });
             if (areasRef.current.length === 0) return;
             const { x, y } = toCanvasCoords(e);
+            // eslint-disable-next-line no-console
+            console.log('[useZoom.handleClick] coords', { x, y });
             for (const area of areasRef.current) {
                 if (isPointInArea(x, y, area)) {
+                    // eslint-disable-next-line no-console
+                    console.log('[useZoom.handleClick] hit', { label: area.label, targetLevel: area.targetLevel });
                     e.stopPropagation();
                     zoomIn(area.targetLevel, area.targetData);
                     return;
                 }
             }
+            // eslint-disable-next-line no-console
+            console.log('[useZoom.handleClick] miss - no area hit');
         };
 
         canvas.addEventListener('mousemove', handleMove);
