@@ -253,6 +253,9 @@ export class CityMapGenerator {
         // Generate districts using Voronoi-like regions
         const districts = this._generateDistricts(cfg, rng, names, centerX, centerY, cityRadius);
 
+        // District ground tinting (under walls and roads)
+        this._renderDistrictGrounds(ctx, districts);
+
         // City walls
         if (cfg.hasWalls) {
             this._renderWalls(ctx, cfg, centerX, centerY, cityRadius, rng, noise);
@@ -402,6 +405,38 @@ export class CityMapGenerator {
         }
 
         return districts;
+    }
+
+    _renderDistrictGrounds(ctx, districts) {
+        // Paint a soft radial tint under each district to visually separate
+        // them. Drawn before walls/roads so those overlay the tints.
+        ctx.save();
+        for (const district of districts) {
+            const profile = DISTRICT_PROFILES[district.type];
+            if (!profile) continue;
+
+            // Radial gradient: full tint at center, fading to nothing at edge
+            const gradient = ctx.createRadialGradient(
+                district.x, district.y, 0,
+                district.x, district.y, district.radius * 1.15
+            );
+
+            // Parse hex color
+            const hex = profile.groundTint;
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+
+            gradient.addColorStop(0,    `rgba(${r}, ${g}, ${b}, ${profile.groundAlpha})`);
+            gradient.addColorStop(0.7,  `rgba(${r}, ${g}, ${b}, ${profile.groundAlpha * 0.5})`);
+            gradient.addColorStop(1,    `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(district.x, district.y, district.radius * 1.15, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     }
 
     _renderWalls(ctx, cfg, centerX, centerY, radius, rng, noise) {
