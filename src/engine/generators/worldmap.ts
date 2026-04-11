@@ -15,6 +15,7 @@
  *   ./worldmap/lore.ts                lore overlay drawing
  */
 
+import { SimplexNoise } from '../noise';
 import { NameGenerator, SeededRandom } from '../../utils';
 import { drawCompassRose, drawMapBorder, drawScaleBar } from '../assets';
 import {
