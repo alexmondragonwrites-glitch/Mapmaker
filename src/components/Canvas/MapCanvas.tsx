@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 
 interface MapCanvasProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
@@ -8,10 +8,18 @@ interface MapCanvasProps {
     onViewChange?: (view: { zoom: number; panX: number; panY: number }) => void;
 }
 
+export interface MapCanvasHandle {
+    /** Reset zoom to 1 and pan to (0, 0). */
+    resetView: () => void;
+}
+
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 
-export function MapCanvas({ onCanvasReady, width = 1200, height = 800, onViewChange }: MapCanvasProps) {
+export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
+    { onCanvasReady, width = 1200, height = 800, onViewChange },
+    ref,
+) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -132,6 +140,15 @@ export function MapCanvas({ onCanvasReady, width = 1200, height = 800, onViewCha
         setPanY(0);
     }, []);
 
+    // Expose resetView to parent via ref so StatusBar can drive it
+    useImperativeHandle(ref, () => ({
+        resetView: () => {
+            setZoom(1);
+            setPanX(0);
+            setPanY(0);
+        },
+    }), []);
+
     // ── Keyboard zoom ───────────────────────────────────────────────
 
     useEffect(() => {
@@ -190,4 +207,4 @@ export function MapCanvas({ onCanvasReady, width = 1200, height = 800, onViewCha
             />
         </div>
     );
-}
+});

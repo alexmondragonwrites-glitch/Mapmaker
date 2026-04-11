@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { MapCanvas } from './components/Canvas';
+import { MapCanvas, type MapCanvasHandle } from './components/Canvas';
 import { StatusBar } from './components/StatusBar';
 import { useGenerator } from './hooks/useGenerator';
 import { useLore } from './hooks/useLore';
@@ -47,6 +47,15 @@ export default function App() {
 
   const [activePanel, setActivePanel] = useState<ActivePanel>('generator');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const mapCanvasRef = useRef<MapCanvasHandle | null>(null);
+
+  // Current view state (zoom/pan) reported from MapCanvas so we can
+  // show it in the StatusBar and wire up the reset button
+  const [view, setView] = useState({ zoom: 1, panX: 0, panY: 0 });
+  const handleViewChange = useCallback((v: typeof view) => setView(v), []);
+  const handleResetView = useCallback(() => {
+    mapCanvasRef.current?.resetView();
+  }, []);
 
   // Pass the zoom controller to the worldmap generator once on mount
   useEffect(() => {
@@ -225,11 +234,22 @@ export default function App() {
 
       <main className="main-content">
         <MapCanvas
+          ref={mapCanvasRef}
           onCanvasReady={handleCanvasReady}
           width={config.width as number}
           height={config.height as number}
+          onViewChange={handleViewChange}
         />
-        <StatusBar status={status} isGenerating={isGenerating} />
+        <StatusBar
+          status={status}
+          isGenerating={isGenerating}
+          view={view}
+          onResetView={handleResetView}
+          breadcrumbs={zoom.breadcrumbs}
+          onBreadcrumbJump={zoom.jumpTo}
+          onZoomOut={zoom.zoomOut}
+          isZoomed={zoom.isZoomed}
+        />
       </main>
     </div>
   );

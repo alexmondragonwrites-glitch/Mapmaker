@@ -398,6 +398,98 @@ body {
     font-size: 0.9em;
 }
 
+/* Status bar right-hand group (view indicator + shortcuts) */
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.view-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95em;
+}
+
+.view-label {
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.85em;
+}
+
+.view-value {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: bold;
+    min-width: 38px;
+    text-align: right;
+}
+
+/* Tiny button used inline in the status bar (reset view, zoom out) */
+.btn-mini {
+    padding: 2px 8px;
+    font-size: 0.9em;
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.btn-mini:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Breadcrumb strip shown in the status bar while the user is zoomed
+   into a region or city */
+.status-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 0.95em;
+}
+
+.breadcrumb-chip-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.breadcrumb-chip {
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-input);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.breadcrumb-chip:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.breadcrumb-chip.active {
+    background: rgba(196, 135, 58, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    cursor: default;
+}
+
+.breadcrumb-sep {
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
 /* ── Token Palette ─────────────────────────────────────────────────── */
 
 .token-palette {
