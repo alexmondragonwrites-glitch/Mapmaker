@@ -875,3 +875,96 @@ export function drawLibrary(ctx, x, y, size) {
     ctx.fillStyle = '#c4a44a'; ctx.fillRect(-s*0.06, -s*0.28, s*0.12, s*0.08);
     ctx.restore();
 }
+
+export function drawDock(ctx, x, y, size, angle = 0) {
+    const s = size; ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
+    ctx.fillStyle = '#6b4423'; ctx.fillRect(-s*0.1, 0, s*0.2, s*0.8);
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = s*0.015;
+    for (let i = 0; i < 6; i++) {
+        const py = s*0.08 + i*s*0.12;
+        ctx.beginPath(); ctx.moveTo(-s*0.12, py); ctx.lineTo(s*0.12, py); ctx.stroke();
+    }
+    ctx.fillStyle = '#5a3a1a';
+    for (const [px, py] of [[-s*0.1,0],[s*0.1,0],[-s*0.1,s*0.8],[s*0.1,s*0.8]]) {
+        ctx.beginPath(); ctx.arc(px, py, s*0.04, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+}
+
+export function drawShack(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#6b5a4a';
+    ctx.fillRect(-s*0.3, -s*0.1, s*0.6, s*0.35);
+    ctx.strokeStyle = '#4a3a2a'; ctx.lineWidth = s*0.015;
+    for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-s*0.3, -s*0.05 + i*s*0.1);
+        ctx.lineTo(s*0.3, -s*0.05 + i*s*0.1);
+        ctx.stroke();
+    }
+    ctx.fillStyle = '#4a3a2a';
+    ctx.beginPath();
+    ctx.moveTo(-s*0.35, -s*0.1);
+    ctx.lineTo(-s*0.05, -s*0.28);
+    ctx.lineTo(s*0.3, -s*0.15);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2a1a0a';
+    ctx.fillRect(-s*0.06, s*0.05, s*0.1, s*0.2);
+    ctx.restore();
+}
+
+export function drawNobleHouse(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    // Larger, finer house with decorative elements
+    ctx.fillStyle = '#a89878';
+    ctx.fillRect(-s*0.5, -s*0.15, s, s*0.5);
+    // Second story line
+    ctx.strokeStyle = '#6a5a4a'; ctx.lineWidth = s*0.02;
+    ctx.beginPath(); ctx.moveTo(-s*0.5, s*0.1); ctx.lineTo(s*0.5, s*0.1); ctx.stroke();
+    // Decorative columns at corners
+    ctx.fillStyle = '#8a7a5a';
+    ctx.fillRect(-s*0.5, -s*0.15, s*0.06, s*0.5);
+    ctx.fillRect(s*0.44, -s*0.15, s*0.06, s*0.5);
+    // Steep roof
+    ctx.fillStyle = '#5a2a1a';
+    ctx.beginPath();
+    ctx.moveTo(-s*0.55, -s*0.15); ctx.lineTo(0, -s*0.5); ctx.lineTo(s*0.55, -s*0.15);
+    ctx.closePath(); ctx.fill();
+    // Ornate windows
+    ctx.fillStyle = '#c4a44a'; ctx.globalAlpha = 0.8;
+    ctx.fillRect(-s*0.35, -s*0.05, s*0.12, s*0.1);
+    ctx.fillRect(-s*0.1, -s*0.05, s*0.12, s*0.1);
+    ctx.fillRect(s*0.15, -s*0.05, s*0.12, s*0.1);
+    ctx.fillRect(-s*0.35, s*0.15, s*0.12, s*0.1);
+    ctx.fillRect(s*0.15, s*0.15, s*0.12, s*0.1);
+    ctx.globalAlpha = 1;
+    // Grand double door
+    ctx.fillStyle = '#4a2a0a';
+    ctx.fillRect(-s*0.08, s*0.15, s*0.16, s*0.2);
+    // Front steps
+    ctx.fillStyle = '#9a9a8a';
+    ctx.fillRect(-s*0.12, s*0.33, s*0.24, s*0.04);
+    ctx.fillRect(-s*0.15, s*0.35, s*0.3, s*0.04);
+    ctx.restore();
+}
+
+export function drawShrine(ctx, x, y, size) {
+    const s = size; ctx.save(); ctx.translate(x, y);
+    // Small stone base
+    ctx.fillStyle = '#9a9080';
+    ctx.fillRect(-s*0.2, -s*0.02, s*0.4, s*0.25);
+    // Pillars
+    ctx.fillStyle = '#c0b090';
+    ctx.fillRect(-s*0.2, -s*0.25, s*0.06, s*0.25);
+    ctx.fillRect(s*0.14, -s*0.25, s*0.06, s*0.25);
+    // Roof (small pagoda-style)
+    ctx.fillStyle = '#5a3a1a';
+    ctx.beginPath();
+    ctx.moveTo(-s*0.3, -s*0.25); ctx.lineTo(0, -s*0.42); ctx.lineTo(s*0.3, -s*0.25);
+    ctx.closePath(); ctx.fill();
+    // Altar inside
+    ctx.fillStyle = '#c4a44a';
+    ctx.fillRect(-s*0.05, -s*0.15, s*0.1, s*0.1);
+    ctx.restore();
+}
+
