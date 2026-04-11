@@ -146,26 +146,30 @@ export default function App() {
   // generator using the clicked city's data. Going back to 'world'
   // switches back to the world generator.
   //
-  // This effect is a zoom-level -> generator sync: it must only run
-  // on the first mount (to align the initial generator with the
-  // default zoom) and on real zoom.level transitions, NOT when the
-  // user manually picks a different generator from the sidebar.
-  // Listing `activeGenerator` in deps would cause a manual "pick
-  // battlemap" or "pick citymap" to be instantly reverted to worldmap
-  // because the effect would re-fire seeing zoom.level==='world' and
-  // activeGenerator.id !== 'worldmap'. We instead key off a prev-level
-  // ref so only actual transitions trigger the sync.
-  const prevZoomLevelRef = useRef(zoom.level);
+  // This effect is a zoom-level -> generator sync: it must run on
+  // real zoom transitions (level change OR target-city change) but
+  // NOT when the user manually picks a different generator from the
+  // sidebar. Listing `activeGenerator` in deps would cause a manual
+  // "pick battlemap" selection to be reverted to worldmap, because
+  // the effect would re-fire seeing zoom.level==='world' and
+  // activeGenerator.id !== 'worldmap'.
+  //
+  // We key the bail check off a (level + target-id) fingerprint so
+  // the effect also re-runs when the user clicks a DIFFERENT city
+  // while still at city-zoom level (e.g. after manually switching
+  // back to worldmap mid-zoom).
+  const prevZoomKeyRef = useRef<string>('');
   const zoomSyncMountedRef = useRef(false);
   useEffect(() => {
-    const prevLevel = prevZoomLevelRef.current;
-    prevZoomLevelRef.current = zoom.level;
+    const zoomKey = `${zoom.level}:${zoom.data?.id ?? zoom.data?.name ?? ''}:${zoom.data?.seed ?? ''}`;
+    const prevKey = prevZoomKeyRef.current;
+    prevZoomKeyRef.current = zoomKey;
     const isFirstRun = !zoomSyncMountedRef.current;
     zoomSyncMountedRef.current = true;
-    // Bail unless this is the first run or the zoom level actually
-    // transitioned. `generators` changing from [] to the populated
-    // list on mount still needs to let the first run through.
-    if (!isFirstRun && prevLevel === zoom.level) return;
+    // Bail unless this is the first run or the zoom target actually
+    // changed. `generators` populating on mount still lets the first
+    // run through.
+    if (!isFirstRun && prevKey === zoomKey) return;
 
     if (zoom.level === 'city' && zoom.data) {
       const cityGen = generators.find(g => g.id === 'citymap');
@@ -183,9 +187,9 @@ export default function App() {
       switchGenerator('worldmap');
     }
     // Intentionally omit `activeGenerator` from deps: we only want
-    // this sync to fire on zoom transitions, not on manual generator
-    // switches from the sidebar. `activeGenerator` is still read
-    // inside for the idempotent guard.
+    // this sync to fire on zoom target changes, not on manual
+    // generator switches from the sidebar. `activeGenerator` is
+    // still read inside for the idempotent guard.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoom.level, zoom.data, generators, switchGenerator, updateConfig]);
 
@@ -210,12 +214,13 @@ export default function App() {
     generate(canvas);
   }, [generate, zoom]);
 
-  // Auto-regenerate when config changes - but debounced by 180ms so
-  // dragging a slider doesn't trigger a render on every intermediate
-  // value. The rendered config lags the visible control state by one
-  // quiet frame, which is barely perceptible but saves 10-20 redundant
-  // full generates per slider drag.
-  const debouncedConfig = useDebouncedValue(config, 180);
+  // Auto-regenerate when config changes - but debounced so dragging
+  // a slider doesn't trigger a render on every intermediate value.
+  // 100 ms is the sweet spot: long enough to coalesce ~6 slider
+  // events but short enough that click-to-zoom transitions (which
+  // flow through the same debouncedConfig path after switchGenerator
+  // + updateConfig) feel immediate.
+  const debouncedConfig = useDebouncedValue(config, 100);
   useEffect(() => {
     if (canvasRef.current && activeGenerator) {
       generate(canvasRef.current);
