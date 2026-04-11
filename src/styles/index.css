@@ -94,25 +94,39 @@ body {
 
 .tab-bar {
     display: flex;
+    flex-direction: column;
     border-bottom: 2px solid var(--border);
     background: var(--bg-panel);
 }
 
+.tab-row {
+    display: flex;
+}
+
+.tab-row-data {
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.15);
+}
+
 .tab-btn {
-    flex: 1;
-    padding: 10px 12px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 6px;
     background: transparent;
     border: none;
     border-bottom: 3px solid transparent;
     color: var(--text-muted);
     font-family: inherit;
-    font-size: 0.85em;
+    font-size: 0.78em;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tab-btn:hover {
@@ -127,7 +141,13 @@ body {
 }
 
 .tab-icon {
-    font-size: 1.1em;
+    font-size: 1em;
+    flex-shrink: 0;
+}
+
+.tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ── Controls Sidebar ──────────────────────────────────────────────── */
