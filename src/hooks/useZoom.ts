@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 
 /**
  * Hierarchical zoom state: world -> region -> city.
@@ -111,8 +111,27 @@ export function useZoom(): UseZoomResult {
     // Mouse position cache for hover effects (not yet used in this pkg)
     const mouseRef = useRef({ x: -1, y: -1 });
 
+    // Stack/level/data are mirrored into refs so the memoized
+    // controller (below) can read the latest values without being
+    // re-created on every state change. Re-creating the controller
+    // is expensive downstream: it cascades into handleCanvasReady,
+    // which used to retrigger a full map regenerate on every render.
+    // Synced in effects to keep react-hooks/refs happy - the next
+    // controller call always happens after an effect phase so the
+    // refs are up to date by the time they're read.
+    const stackRef = useRef(stack);
+    const levelRef = useRef(level);
+    const dataRef = useRef(data);
+    useEffect(() => { stackRef.current = stack; }, [stack]);
+    useEffect(() => { levelRef.current = level; }, [level]);
+    useEffect(() => { dataRef.current = data; }, [data]);
+
     // ── Controller object passed to the generator ─────────────────
-    const controller: ZoomController = {
+    //
+    // Stable across renders (empty deps). Methods read state via the
+    // refs above so updates are picked up on the next call without
+    // invalidating the controller identity.
+    const controller = useMemo<ZoomController>(() => ({
         _areas: areasRef.current,
         clearClickableAreas() {
             areasRef.current = [];
@@ -124,7 +143,7 @@ export function useZoom(): UseZoomResult {
         renderBreadcrumbs(ctx: CanvasRenderingContext2D, _canvasWidth: number) {
             // The generator still calls this; we render breadcrumbs to
             // the canvas so they survive export-as-png
-            const crumbs = buildBreadcrumbs(stack, level, data);
+            const crumbs = buildBreadcrumbs(stackRef.current, levelRef.current, dataRef.current);
             if (crumbs.length <= 1) return;
 
             ctx.save();
@@ -165,15 +184,18 @@ export function useZoom(): UseZoomResult {
 
             ctx.restore();
         },
-    };
+    }), []);
 
     // ── Actions ────────────────────────────────────────────────────
 
     const zoomIn = useCallback((nextLevel: ZoomLevel, nextData: ZoomTargetData) => {
-        setStack(s => [...s, { level, data }]);
+        // Read level/data from refs so this callback stays stable
+        // across renders (needed for useZoom's return object to
+        // retain a stable identity).
+        setStack(s => [...s, { level: levelRef.current, data: dataRef.current }]);
         setLevel(nextLevel);
         setData(nextData);
-    }, [level, data]);
+    }, []);
 
     const zoomOut = useCallback(() => {
         setStack(s => {
@@ -318,9 +340,17 @@ export function useZoom(): UseZoomResult {
         };
     }, [zoomIn]);
 
-    const breadcrumbs = buildBreadcrumbs(stack, level, data);
+    const breadcrumbs = useMemo(
+        () => buildBreadcrumbs(stack, level, data),
+        [stack, level, data],
+    );
 
-    return {
+    // Memoize the return object so consumers (App.tsx) that list
+    // `zoom` in dependency arrays don't get invalidated on every
+    // render of useZoom. Since breadcrumbs, controller and all the
+    // action callbacks above are memoized, the return identity only
+    // changes when the actual zoom state changes.
+    return useMemo(() => ({
         level,
         data,
         stack,
@@ -332,5 +362,5 @@ export function useZoom(): UseZoomResult {
         jumpTo,
         reset,
         bindCanvas,
-    };
+    }), [level, data, stack, breadcrumbs, controller, zoomIn, zoomOut, jumpTo, reset, bindCanvas]);
 }

@@ -42,6 +42,41 @@ export function useGenerator() {
     config: GeneratorConfig;
   } | null>(null);
 
+  // Mirror state into refs so the public `generate` / `rerenderOverlay`
+  // callbacks can have empty dependency arrays and stay referentially
+  // stable across config and activeGenerator changes. Without this,
+  // every slider tick invalidated `generate`, which propagated into
+  // every useEffect and useCallback in App.tsx that listed `generate`
+  // as a dep - including the MapCanvas onCanvasReady prop, which in
+  // turn triggered a fresh generate() on every render via the
+  // canvas-ready useEffect. With refs + stable callbacks that whole
+  // chain collapses to "only the debounced config effect triggers a
+  // regen".
+  //
+  // The refs are synced in a useEffect (rather than the render body)
+  // to keep react-hooks/refs happy. That means during the very first
+  // mount commit, the refs are still their initial values when
+  // child-component effects fire - but no generate() call path relies
+  // on them during that window: the initial map render is kicked off
+  // by the debouncedConfig effect a few ms after the registry setup
+  // effect installs the first activeGenerator.
+  const activeGeneratorRef = useRef(activeGenerator);
+  const configRef = useRef(config);
+  // `isGenerating` is ALSO mirrored into a ref, but unlike the others
+  // we also flip it synchronously at the top of `generate` so tight
+  // callers (several effects firing in the same render commit) bail
+  // out even before React has committed the setIsGenerating update.
+  const isGeneratingRef = useRef(false);
+  useEffect(() => {
+    activeGeneratorRef.current = activeGenerator;
+  }, [activeGenerator]);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+  useEffect(() => {
+    isGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
+
   // Initialize registry once
   useEffect(() => {
     const registry = new GeneratorRegistry();
@@ -68,14 +103,20 @@ export function useGenerator() {
   }, []);
 
   const generate = useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas || !activeGenerator || isGenerating) return;
+    const activeGen = activeGeneratorRef.current;
+    const cfg = configRef.current;
+    if (!canvas || !activeGen || isGeneratingRef.current) return;
 
+    // Flip the guard synchronously so any subsequent generate() calls
+    // in the same commit phase bail out, even though React hasn't
+    // committed the setIsGenerating update yet.
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     setStatus('Generiere Karte...');
 
     requestAnimationFrame(() => {
       try {
-        activeGenerator.instance.generate(canvas, config);
+        activeGen.instance.generate(canvas, cfg);
 
         // Snapshot the base layer before the overlay hook runs so
         // placement changes and hover highlights can redraw without
@@ -98,25 +139,26 @@ export function useGenerator() {
         }
         lastRenderRef.current = {
           canvas,
-          generatorId: activeGenerator.id,
-          config,
+          generatorId: activeGen.id,
+          config: cfg,
         };
 
         // Post-generate overlay (manual placed assets). Any error
         // here is logged but doesn't roll back the base render.
         try {
-          afterHookRef.current?.(canvas, activeGenerator.id, config);
+          afterHookRef.current?.(canvas, activeGen.id, cfg);
         } catch (hookErr) {
           console.error('afterGenerate hook failed:', hookErr);
         }
-        setStatus(`${activeGenerator.label} generiert (${canvas.width}×${canvas.height}px)`);
+        setStatus(`${activeGen.label} generiert (${canvas.width}×${canvas.height}px)`);
       } catch (err: any) {
         setStatus(`Fehler: ${err.message}`);
         console.error('Generation error:', err);
       }
+      isGeneratingRef.current = false;
       setIsGenerating(false);
     });
-  }, [activeGenerator, config, isGenerating]);
+  }, []);
 
   /**
    * Cheap redraw: restores the last base snapshot and re-runs the

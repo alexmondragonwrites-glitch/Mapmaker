@@ -56,11 +56,20 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         onViewChange?.({ zoom, panX, panY });
     }, [zoom, panX, panY, onViewChange]);
 
+    // Fire onCanvasReady exactly once when the canvas element first
+    // mounts. We latch the callback in a ref so the effect has [] deps
+    // and doesn't re-fire whenever the parent re-creates the callback
+    // (which used to cause a full map regenerate on every App render
+    // because handleCanvasReady captured `generate` in its closure).
+    const onCanvasReadyRef = useRef(onCanvasReady);
+    useEffect(() => {
+        onCanvasReadyRef.current = onCanvasReady;
+    }, [onCanvasReady]);
     useEffect(() => {
         if (canvasRef.current) {
-            onCanvasReady(canvasRef.current);
+            onCanvasReadyRef.current(canvasRef.current);
         }
-    }, [onCanvasReady]);
+    }, []);
 
     // Reset zoom/pan when the canvas dimensions change so a newly
     // generated map of a different size lands centered
