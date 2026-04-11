@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc -b",
+    "typecheck:strict": "tsc -p tsconfig.strict.json --noEmit",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --experimental-default-type=module scripts/run-selftest.mjs",
+    "test": "node --experimental-strip-types --experimental-default-type=module scripts/run-selftest.mjs && npm run typecheck:strict",
     "preview": "vite preview"
   },
   "dependencies": {

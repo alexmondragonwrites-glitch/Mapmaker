@@ -1,0 +1,58 @@
+{
+  // ───────────────────────────────────────────────────────────────────
+  // Strict-mode TypeScript check for a curated subset of files.
+  //
+  // Why this exists:
+  //   The project inherited ~930 implicit-any warnings when we turned
+  //   on strict mode globally. Fixing them all in one commit would be
+  //   a huge risky PR. Instead we adopt strict mode file-by-file:
+  //
+  //   1. Add a file to the `include` list below once it is strict-clean
+  //   2. Run `npm run typecheck:strict` locally and in CI
+  //   3. Any new file should be strict-clean from the start
+  //
+  // How it works:
+  //   This config extends tsconfig.app.json (so all the regular
+  //   compiler options apply) and then overrides with `strict: true`,
+  //   plus a narrower `include` glob so only clean files are checked.
+  //   The main `npm run build` still uses the permissive config, so
+  //   unmigrated files don't break the build.
+  // ───────────────────────────────────────────────────────────────────
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    // Override the build info path so this config's incremental data
+    // doesn't clobber the main one
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.strict.tsbuildinfo",
+    // Keep the build info independent
+    "composite": false
+  },
+  "include": [
+    // Core engine primitives - pure math, no DOM
+    "src/engine/noise.ts",
+    "src/engine/assets-runtime/types.ts",
+    "src/engine/assets-runtime/classifier.ts",
+
+    // React hooks that are small and strict-clean by construction
+    "src/hooks/useDebouncedValue.ts",
+
+    // As files are migrated, add them here. Keep the list alphabetised
+    // within each section.
+  ],
+  // Exclude the main test/build-info paths from the inherited config
+  // so we don't accidentally pull in the whole src/ tree
+  "exclude": [
+    "node_modules",
+    "dist",
+    "_legacy",
+    "scripts",
+    "private-assets"
+  ]
+}

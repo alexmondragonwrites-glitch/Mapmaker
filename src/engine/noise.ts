@@ -1,33 +1,61 @@
 /**
- * Simplex Noise Implementation for Calyndra Mapmaker
- * Based on Stefan Gustavson's simplex noise algorithm
- * Optimized for 2D terrain generation
+ * Simplex Noise Implementation for Calyndra Mapmaker.
+ *
+ * Based on Stefan Gustavson's 2D simplex noise algorithm
+ * (public domain), optimised for deterministic terrain generation.
+ *
+ * Usage:
+ *   const noise = new SimplexNoise(12345);
+ *   const h = noise.noise2D(x, y);        // raw [-1, 1] noise
+ *   const h2 = noise.fbm(x, y);           // fractal / multi-octave
+ *   const h3 = noise.ridgeNoise(x, y);    // inverted mountain ridges
+ *   const h4 = noise.warpedNoise(x, y);   // domain-warped organic shapes
+ *
+ * Seed determinism: identical seeds always produce identical output,
+ * so re-rendering the same map with the same config is pixel-stable.
  */
 
 const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
 const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
 
-const GRAD3 = [
+/** 12 canonical gradient vectors for 2D simplex noise. */
+const GRAD3: ReadonlyArray<readonly [number, number]> = [
     [1, 1], [-1, 1], [1, -1], [-1, -1],
     [1, 0], [-1, 0], [0, 1], [0, -1],
-    [1, 1], [-1, 1], [1, -1], [-1, -1]
+    [1, 1], [-1, 1], [1, -1], [-1, -1],
 ];
 
 export class SimplexNoise {
-    constructor(seed = Math.random() * 65536) {
+    /** Shuffled permutation table of length 512 (first half mirrored). */
+    private readonly perm: Uint8Array;
+    /** Precomputed `perm[i] % 12` so we can skip the modulo in hot paths. */
+    private readonly permMod12: Uint8Array;
+
+    /**
+     * Build a new noise instance deterministically seeded from `seed`.
+     *
+     * @param seed A finite number. Same value = same noise pattern.
+     *             Default is a random 16-bit integer.
+     */
+    constructor(seed: number = Math.random() * 65536) {
         this.perm = new Uint8Array(512);
         this.permMod12 = new Uint8Array(512);
         this._seed(seed);
     }
 
-    _seed(seed) {
+    /**
+     * Populate the permutation tables via a Fisher-Yates shuffle keyed
+     * off `seed`. Uses a Lehmer random number generator so the result is
+     * reproducible across browsers and runs.
+     */
+    private _seed(seed: number): void {
         const p = new Uint8Array(256);
         for (let i = 0; i < 256; i++) p[i] = i;
 
-        // Fisher-Yates shuffle with seed
+        // Fisher-Yates shuffle driven by a Lehmer RNG
         let s = seed;
         for (let i = 255; i > 0; i--) {
-            s = (s * 16807 + 0) % 2147483647;
+            s = (s * 16807) % 2147483647;
             const j = s % (i + 1);
             [p[i], p[j]] = [p[j], p[i]];
         }
@@ -38,7 +66,12 @@ export class SimplexNoise {
         }
     }
 
-    noise2D(x, y) {
+    /**
+     * Raw 2D simplex noise.
+     *
+     * @returns A pseudo-random value roughly in the range [-1, 1].
+     */
+    noise2D(x: number, y: number): number {
         const s = (x + y) * F2;
         const i = Math.floor(x + s);
         const j = Math.floor(y + s);
@@ -60,7 +93,9 @@ export class SimplexNoise {
         const ii = i & 255;
         const jj = j & 255;
 
-        let n0 = 0, n1 = 0, n2 = 0;
+        let n0 = 0;
+        let n1 = 0;
+        let n2 = 0;
 
         let t0 = 0.5 - x0 * x0 - y0 * y0;
         if (t0 >= 0) {
@@ -87,9 +122,21 @@ export class SimplexNoise {
     }
 
     /**
-     * Fractal Brownian Motion - layered noise for natural-looking terrain
+     * Fractal Brownian Motion: sums `octaves` layers of noise2D at
+     * doubling frequencies. The result is renormalised into roughly
+     * [-1, 1]. Used for natural-looking terrain.
+     *
+     * @param octaves     Number of noise layers (typically 4-6).
+     * @param lacunarity  Frequency multiplier between octaves (2.0 = double).
+     * @param persistence Amplitude multiplier between octaves (0.5 = half).
      */
-    fbm(x, y, octaves = 6, lacunarity = 2.0, persistence = 0.5) {
+    fbm(
+        x: number,
+        y: number,
+        octaves: number = 6,
+        lacunarity: number = 2.0,
+        persistence: number = 0.5,
+    ): number {
         let value = 0;
         let amplitude = 1;
         let frequency = 1;
@@ -106,9 +153,17 @@ export class SimplexNoise {
     }
 
     /**
-     * Ridge noise - creates mountain ridge-like patterns
+     * Ridge noise: takes `1 - abs(n)` of each octave and squares it,
+     * which creates sharp ridge-like peaks. Used to simulate mountain
+     * ranges along tectonic boundaries.
      */
-    ridgeNoise(x, y, octaves = 6, lacunarity = 2.0, persistence = 0.5) {
+    ridgeNoise(
+        x: number,
+        y: number,
+        octaves: number = 6,
+        lacunarity: number = 2.0,
+        persistence: number = 0.5,
+    ): number {
         let value = 0;
         let amplitude = 1;
         let frequency = 1;
@@ -128,15 +183,25 @@ export class SimplexNoise {
     }
 
     /**
-     * Domain-warped noise for organic terrain shapes
+     * Domain-warped noise: offsets the input coordinates by a separate
+     * noise field before sampling. This produces organic, non-repeating
+     * shapes that look more like real terrain than raw fBm.
+     *
+     * @param scale        Input frequency multiplier.
+     * @param warpStrength How much the domain is perturbed (0 = none, 1 = a lot).
      */
-    warpedNoise(x, y, scale = 1, warpStrength = 0.5) {
+    warpedNoise(
+        x: number,
+        y: number,
+        scale: number = 1,
+        warpStrength: number = 0.5,
+    ): number {
         const warpX = this.fbm(x * scale + 5.2, y * scale + 1.3, 4);
         const warpY = this.fbm(x * scale + 9.7, y * scale + 2.8, 4);
         return this.fbm(
-            (x * scale + warpStrength * warpX),
-            (y * scale + warpStrength * warpY),
-            6
+            x * scale + warpStrength * warpX,
+            y * scale + warpStrength * warpY,
+            6,
         );
     }
 }
