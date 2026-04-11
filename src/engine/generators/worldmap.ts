@@ -81,6 +81,7 @@ export class WorldMapGenerator {
                 { value: 'colored', label: 'Farbig' },
                 { value: 'parchment', label: 'Pergament' },
                 { value: 'book', label: 'Buchstil (Hochwertig)' },
+                { value: 'wonderdraft', label: 'Wonderdraft (für Assets)' },
             ]},
             { type: 'select', key: 'continentShape', label: 'Kontinentform', options: [
                 { value: 'natural', label: 'Natürlich' },
@@ -129,26 +130,43 @@ export class WorldMapGenerator {
 
         // Is this the book-quality style?
         const isBook = cfg.mapStyle === 'book';
+        // Wonderdraft style: warm parchment base tuned for asset overlays
+        const isWonderdraft = cfg.mapStyle === 'wonderdraft';
 
-        // ── Book style: parchment base ──
+        // ── Parchment base ──
         if (isBook) {
             renderParchmentTexture(ctx, cfg.width, cfg.height, cfg.seed);
+        } else if (isWonderdraft) {
+            // Wonderdraft assets look best on a warm, textured cream
+            // background. Reuse the parchment generator but with a
+            // lighter, less aged tone so the assets contrast well.
+            this._renderWonderdraftBase(ctx, cfg, heightMap, moistureMap);
         }
 
         // Render terrain
         if (isBook) {
             this._renderBookTerrainOverlay(ctx, cfg, heightMap, moistureMap);
+        } else if (isWonderdraft) {
+            // Terrain already drawn by _renderWonderdraftBase above
         } else if (cfg.mapStyle === 'parchment') {
             this._renderParchmentStyle(ctx, cfg, heightMap, moistureMap);
         } else {
             this._renderColoredStyle(ctx, cfg, heightMap, moistureMap);
         }
 
-        // ── Book style: hillshading ──
+        // ── Hillshading ──
         if (isBook) {
             renderHillshading(ctx, cfg.width, cfg.height, heightMap, {
                 strength: 0.35,
                 ambient: 0.35,
+            });
+        } else if (isWonderdraft) {
+            // Very subtle shading - Wonderdraft assets already carry their
+            // own 3D baked in via drop shadows, so we only add a whisper
+            // of terrain depth underneath
+            renderHillshading(ctx, cfg.width, cfg.height, heightMap, {
+                strength: 0.15,
+                ambient: 0.55,
             });
         } else if (cfg.mapStyle === 'colored') {
             // Subtle hillshading for colored mode too
@@ -192,15 +210,23 @@ export class WorldMapGenerator {
             });
         }
 
-        // Render forests as painted masses (like reference RPG maps)
-        renderPaintedForests(ctx, cfg.width, cfg.height, heightMap, moistureMap,
-            temperatureMap, cfg.seaLevel, cfg.mountainLevel, cfg.forestDensity, cfg.seed);
+        // Render forests as painted masses (like reference RPG maps).
+        // In Wonderdraft mode we skip this because the palette is too
+        // light and the dark green masses would clash with the asset
+        // stamps we're about to draw on top.
+        if (!isWonderdraft) {
+            renderPaintedForests(ctx, cfg.width, cfg.height, heightMap, moistureMap,
+                temperatureMap, cfg.seaLevel, cfg.mountainLevel, cfg.forestDensity, cfg.seed);
+        }
 
-        // Optionally add individual trees at forest edges for detail
-        if (!isBook) {
-            this._renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
-        } else {
+        // Individual trees at forest edges for detail. Wonderdraft mode
+        // relies entirely on imported tree assets (via _renderNaturalForests
+        // which goes through drawTreeSmart), so we still call it but the
+        // procedural fallback icons would show through on missing assets.
+        if (isBook) {
             this._renderBookNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
+        } else {
+            this._renderNaturalForests(ctx, cfg, heightMap, moistureMap, temperatureMap, rng);
         }
 
         // Generate and render mountains along ridges (not random grid)
@@ -264,12 +290,17 @@ export class WorldMapGenerator {
             coverage: isBook ? 0.12 : 0.08,
         });
 
-        // ── Book style: aging and vignette (applied last) ──
+        // ── Final post-processing ──
         if (isBook) {
             renderAgeEffects(ctx, cfg.width, cfg.height, cfg.seed, 0.5);
             renderVignette(ctx, cfg.width, cfg.height, 0.35);
+        } else if (isWonderdraft) {
+            // Very subtle age spots and a soft vignette, warm tone so
+            // the Wonderdraft assets still pop
+            renderAgeEffects(ctx, cfg.width, cfg.height, cfg.seed, 0.2);
+            renderVignette(ctx, cfg.width, cfg.height, 0.1);
         } else {
-            // Subtle vignette for all styles
+            // Subtle vignette for all other styles
             renderVignette(ctx, cfg.width, cfg.height, 0.15);
         }
 
@@ -476,6 +507,105 @@ export class WorldMapGenerator {
         ctx.strokeStyle = pal.ink;
         ctx.lineWidth = 1.5;
         this._drawContourLine(ctx, cfg, heightMap, seaLevel);
+    }
+
+    /**
+     * Wonderdraft-style base rendering. This is a different look than
+     * both the colored and parchment modes: it aims to match the warm,
+     * slightly desaturated look of hand-drawn commercial fantasy maps
+     * so the Wonderdraft PNG assets (buildings, mountains, trees) sit
+     * naturally on top.
+     *
+     * Key differences from parchment / colored:
+     *   - Land base is a warm cream (not parchment brown) so assets pop
+     *   - Water is a soft teal-green, not royal blue
+     *   - Biomes are muted: no saturated forest greens, no deep reds
+     *   - Coastlines are softer gradients, not hard lines
+     *   - Mountains/hills are only hinted at via hillshading - the
+     *     Wonderdraft assets carry the actual visual weight
+     */
+    _renderWonderdraftBase(ctx, cfg, heightMap, moistureMap) {
+        const { width, height, seaLevel, mountainLevel } = cfg;
+
+        // Wonderdraft-style base palette. Lightly warmer and cleaner
+        // than the PALETTES.parchment values.
+        const P = {
+            deepWater:    [ 62, 104, 120 ],  // dusty teal
+            shallowWater: [108, 160, 172 ],  // lighter teal
+            sand:         [218, 200, 158 ],  // warm dune
+            grass:        [186, 188, 122 ],  // muted sage
+            forestHint:   [140, 158,  98 ],  // darker sage (no asset, just tone)
+            drylands:     [202, 184, 124 ],  // savanna cream
+            mountainHint: [168, 156, 128 ],  // warm stone
+            snow:         [234, 230, 218 ],  // cream white
+        };
+
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+
+        const lerp3 = (a: number[], b: number[], t: number): number[] => [
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t,
+            a[2] + (b[2] - a[2]) * t,
+        ];
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const idx = y * width + x;
+                const h = heightMap[idx];
+                const m = moistureMap[idx];
+                const pi = idx * 4;
+
+                let rgb: number[];
+
+                if (h < seaLevel) {
+                    // Water: interpolate by depth from deep teal to shallow
+                    const depth = (seaLevel - h) / seaLevel;
+                    const t = Math.max(0, Math.min(1, depth * 1.3));
+                    rgb = lerp3(P.shallowWater, P.deepWater, t);
+                } else if (h < seaLevel + 0.03) {
+                    // Beach band
+                    rgb = P.sand;
+                } else if (h < mountainLevel) {
+                    // Land: blend between biomes by moisture, keep it muted
+                    const landT = (h - seaLevel) / (mountainLevel - seaLevel);
+                    if (m > 0.55) {
+                        // Moist - drift toward the forest hint tone
+                        rgb = lerp3(P.grass, P.forestHint, Math.min(1, (m - 0.55) * 2));
+                    } else if (m > 0.25) {
+                        // Normal grass lands
+                        rgb = P.grass;
+                    } else {
+                        // Dry - drift toward drylands
+                        rgb = lerp3(P.grass, P.drylands, Math.min(1, (0.25 - m) * 2));
+                    }
+                    // Subtle elevation darkening (asset shadow bleed will
+                    // handle the rest)
+                    const dim = 1 - landT * 0.08;
+                    rgb = [rgb[0] * dim, rgb[1] * dim, rgb[2] * dim];
+                } else {
+                    // Mountains: warm stone, slightly lighter at peaks
+                    const peakT = Math.min(1, (h - mountainLevel) / 0.2);
+                    rgb = lerp3(P.mountainHint, P.snow, peakT * 0.5);
+                }
+
+                data[pi]     = Math.max(0, Math.min(255, rgb[0]));
+                data[pi + 1] = Math.max(0, Math.min(255, rgb[1]));
+                data[pi + 2] = Math.max(0, Math.min(255, rgb[2]));
+                data[pi + 3] = 255;
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Soft coastline fade: a thin sand ring just above sea level
+        // gives the classic hand-drawn coastline halo
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = 'rgb(218, 200, 158)';
+        ctx.lineWidth = 3;
+        this._drawContourLine(ctx, cfg, heightMap, seaLevel + 0.005);
+        ctx.restore();
     }
 
     _drawContourLine(ctx, cfg, heightMap, level) {
