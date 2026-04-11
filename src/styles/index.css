@@ -789,3 +789,88 @@ body {
         box-shadow: none;
     }
 }
+
+/* ── Asset Panel ──────────────────────────────────────────────────── */
+
+.asset-panel .asset-intro {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 8px 10px;
+    background: rgba(196, 135, 58, 0.08);
+    border-left: 2px solid var(--accent);
+    border-radius: 2px;
+    margin-bottom: 6px;
+}
+
+.asset-panel .asset-intro strong {
+    color: var(--text);
+}
+
+.asset-panel .asset-empty {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 8px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    text-align: center;
+    font-style: italic;
+}
+
+.asset-panel .asset-category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.asset-panel .asset-category-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 0.75em;
+    background: var(--bg-input);
+    border-radius: 2px;
+}
+
+.asset-panel .asset-category-name {
+    color: var(--text-muted);
+    text-transform: capitalize;
+}
+
+.asset-panel .asset-category-count {
+    color: var(--accent);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+
+.asset-pack-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    cursor: pointer;
+}
+
+.asset-pack-toggle input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.asset-pack-meta {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    padding: 0 10px 6px;
+    font-style: italic;
+}
+
+.lore-card.disabled {
+    opacity: 0.55;
+}
+
+.lore-card.disabled .lore-card-name {
+    text-decoration: line-through;
+}
+

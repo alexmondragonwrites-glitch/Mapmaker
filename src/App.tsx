@@ -1,10 +1,12 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MapCanvas } from './components/Canvas';
 import { StatusBar } from './components/StatusBar';
 import { useGenerator } from './hooks/useGenerator';
 import { useLore } from './hooks/useLore';
+import { useAssets } from './hooks/useAssets';
 import { exportCanvasAsPNG } from './utils';
+import type { ActivePanel } from './components/Sidebar/TabBar';
 
 export default function App() {
   const {
@@ -28,8 +30,27 @@ export default function App() {
     getStats,
   } = useLore();
 
-  const [activePanel, setActivePanel] = useState<'generator' | 'lore'>('generator');
+  const {
+    packs: assetPacks,
+    summary: assetSummary,
+    loading: assetsLoading,
+    error: assetsError,
+    lastImport: lastAssetImport,
+    importFiles: importAssets,
+    togglePack: toggleAssetPack,
+    deletePack: deleteAssetPack,
+  } = useAssets();
+
+  const [activePanel, setActivePanel] = useState<ActivePanel>('generator');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Format last import result as a user-facing message
+  const lastAssetImportMessage = useMemo(() => {
+    if (!lastAssetImport) return null;
+    const { pack, imported, skipped } = lastAssetImport;
+    const base = `"${pack.name}" importiert: ${imported} Assets`;
+    return skipped > 0 ? `${base} (${skipped} uebersprungen)` : base;
+  }, [lastAssetImport]);
 
   // Generate when canvas is ready or config changes
   const handleCanvasReady = useCallback((canvas: HTMLCanvasElement) => {
@@ -65,6 +86,24 @@ export default function App() {
     }
   }, [activeGenerator, config.seed]);
 
+  const handleAssetsImport = useCallback(async (files: File[]) => {
+    await importAssets(files);
+    // Re-render current map so new assets show up immediately
+    if (canvasRef.current) {
+      generate(canvasRef.current);
+    }
+  }, [importAssets, generate]);
+
+  const handleAssetsToggle = useCallback(async (id: string, enabled: boolean) => {
+    await toggleAssetPack(id, enabled);
+    if (canvasRef.current) generate(canvasRef.current);
+  }, [toggleAssetPack, generate]);
+
+  const handleAssetsDelete = useCallback(async (id: string) => {
+    await deleteAssetPack(id);
+    if (canvasRef.current) generate(canvasRef.current);
+  }, [deleteAssetPack, generate]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -97,8 +136,14 @@ export default function App() {
         activePanel={activePanel}
         lore={lore}
         hasLore={hasLore}
+        assetPacks={assetPacks}
+        assetSummary={assetSummary}
+        assetsLoading={assetsLoading}
+        assetsError={assetsError}
+        lastAssetImportMessage={lastAssetImportMessage}
         onSelectGenerator={handleSelectGenerator}
         onSelectLore={() => setActivePanel('lore')}
+        onSelectAssets={() => setActivePanel('assets')}
         onUpdateConfig={updateConfig}
         onGenerate={handleGenerate}
         onRandomize={handleRandomize}
@@ -107,6 +152,9 @@ export default function App() {
         onLoreExport={exportFile}
         onLoreClear={clearAll}
         getLoreStats={getStats}
+        onAssetsImport={handleAssetsImport}
+        onAssetsTogglePack={handleAssetsToggle}
+        onAssetsDeletePack={handleAssetsDelete}
       />
 
       <main className="main-content">
