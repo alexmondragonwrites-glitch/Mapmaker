@@ -2,3 +2,19 @@ node_modules
 dist
 *.local
 .DS_Store
+
+# ── Private / Licensed Assets ─────────────────────────────────────────
+# These folders hold third-party commercial assets (e.g. Wonderdraft
+# asset packs) which cannot be redistributed. They MUST NOT be committed.
+# The app loads them at runtime from IndexedDB (user imports once per
+# browser) or from these local folders in dev mode only.
+#
+# Everything inside is ignored; only the README files are tracked so the
+# folder structure stays visible in Git.
+private-assets/**
+!private-assets/README.md
+!private-assets/**/README.md
+
+# Catch-all: any PNG/JPG/ZIP in non-source folders
+*.wonderdraft_symbols
+*.wonderdraft_icon
