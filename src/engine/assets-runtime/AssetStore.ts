@@ -198,6 +198,62 @@ export class AssetStore {
         });
     }
 
+    /**
+     * Flip the user-disabled flag on a single asset. Disabled assets
+     * stay in storage (so re-enabling is cheap) but are excluded from
+     * the runtime cache. Invalidates the cache so the next
+     * `buildCache` call reflects the change.
+     */
+    async setAssetDisabled(id: string, disabled: boolean): Promise<void> {
+        const db = this.requireDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_ASSETS, 'readwrite');
+            const store = tx.objectStore(STORE_ASSETS);
+            const req = store.get(id);
+            req.onsuccess = () => {
+                const rec = req.result as AssetRecord | undefined;
+                if (!rec) {
+                    resolve();
+                    return;
+                }
+                rec.disabled = disabled;
+                store.put(rec);
+            };
+            req.onerror = () => reject(req.error);
+            tx.oncomplete = () => {
+                this.invalidateCache();
+                resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    /**
+     * Get every stored asset for a category, regardless of pack
+     * enablement or disabled flag. Used by the UI to show the full
+     * variant list with per-asset checkboxes. Returns a lightweight
+     * projection (no blob) so the caller can render hundreds of rows
+     * without blowing up memory.
+     */
+    async listAllAssets(category: AssetCategory): Promise<Array<{
+        id: string;
+        packId: string;
+        filename: string;
+        width?: number;
+        height?: number;
+        disabled: boolean;
+    }>> {
+        const records = await this.getAssetsByCategory(category, false);
+        return records.map(r => ({
+            id: r.id,
+            packId: r.packId,
+            filename: r.filename,
+            width: r.width,
+            height: r.height,
+            disabled: !!r.disabled,
+        }));
+    }
+
     // ── Loaded asset cache ──────────────────────────────────────────
 
     /**
@@ -233,6 +289,9 @@ export class AssetStore {
 
             const loaded: LoadedAsset[] = [];
             for (const rec of records) {
+                // Skip variants the user has individually disabled
+                // (e.g. a mis-classified file they don't want picked).
+                if (rec.disabled) continue;
                 try {
                     const image = await blobToImage(rec.blob);
                     rec.width = image.naturalWidth;

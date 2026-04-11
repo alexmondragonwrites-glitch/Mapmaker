@@ -42,6 +42,8 @@ export default function App() {
     importFiles: importAssets,
     togglePack: toggleAssetPack,
     deletePack: deleteAssetPack,
+    listVariants: listAssetVariants,
+    toggleAsset: toggleAssetVariant,
   } = useAssets();
 
   const zoom = useZoom();
@@ -186,6 +188,13 @@ export default function App() {
     if (canvasRef.current) generate(canvasRef.current);
   }, [deleteAssetPack, generate]);
 
+  // Toggling a single variant's disabled flag rebuilds the asset
+  // cache, so re-render the current map so the change shows up.
+  const handleAssetsToggleVariant = useCallback(async (id: string, disabled: boolean) => {
+    await toggleAssetVariant(id, disabled);
+    if (canvasRef.current) generate(canvasRef.current);
+  }, [toggleAssetVariant, generate]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -254,6 +263,8 @@ export default function App() {
         onAssetsImport={handleAssetsImport}
         onAssetsTogglePack={handleAssetsToggle}
         onAssetsDeletePack={handleAssetsDelete}
+        onAssetsListVariants={listAssetVariants}
+        onAssetsToggleVariant={handleAssetsToggleVariant}
       />
 
       <main className="main-content">

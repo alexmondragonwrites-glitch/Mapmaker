@@ -4,8 +4,8 @@ import { LorePanel } from './LorePanel';
 import { AssetPanel } from './AssetPanel';
 import { ActionBar } from './ActionBar';
 import type { GeneratorEntry, GeneratorConfig, LoreData } from '../../engine/types';
-import type { PackRecord } from '../../engine/assets-runtime';
-import type { AssetSummary } from '../../hooks/useAssets';
+import type { AssetCategory, PackRecord } from '../../engine/assets-runtime';
+import type { AssetSummary, AssetVariantRow } from '../../hooks/useAssets';
 
 interface SidebarProps {
   generators: GeneratorEntry[];
@@ -29,6 +29,8 @@ interface SidebarProps {
   onAssetsImport: (files: File[]) => Promise<void>;
   onAssetsTogglePack: (id: string, enabled: boolean) => Promise<void>;
   onAssetsDeletePack: (id: string) => Promise<void>;
+  onAssetsListVariants: (category: AssetCategory) => Promise<AssetVariantRow[]>;
+  onAssetsToggleVariant: (id: string, disabled: boolean) => Promise<void>;
   // Navigation
   onSelectGenerator: (id: string) => void;
   onSelectLore: () => void;
@@ -86,6 +88,8 @@ export function Sidebar(props: SidebarProps) {
             onImport={props.onAssetsImport}
             onTogglePack={props.onAssetsTogglePack}
             onDeletePack={props.onAssetsDeletePack}
+            onListVariants={props.onAssetsListVariants}
+            onToggleAsset={props.onAssetsToggleVariant}
           />
         )}
         {props.activePanel === 'generator' && props.activeGenerator && (

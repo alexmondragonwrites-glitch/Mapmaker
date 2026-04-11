@@ -59,6 +59,13 @@ export interface AssetRecord {
     height?: number;
     /** Insert timestamp (ms since epoch). */
     addedAt: number;
+    /**
+     * User-disabled flag. When true, the asset is still stored in
+     * IndexedDB but excluded from the runtime cache so no generator
+     * will ever pick it. Lets the user hide individual mis-classified
+     * or ugly variants without deleting the whole pack.
+     */
+    disabled?: boolean;
 }
 
 /** Pack metadata. */

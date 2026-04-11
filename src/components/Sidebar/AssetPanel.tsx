@@ -1,14 +1,74 @@
-import { useCallback, useState } from 'react';
-import type { PackRecord } from '../../engine/assets-runtime';
-import type { AssetSummary, AssetDiagCategory } from '../../hooks/useAssets';
+import { useCallback, useEffect, useState } from 'react';
+import type { AssetCategory, PackRecord } from '../../engine/assets-runtime';
+import type {
+    AssetSummary,
+    AssetDiagCategory,
+    AssetVariantRow,
+} from '../../hooks/useAssets';
 
 /**
- * One collapsible row in the category diagnostics list. Expands to
- * show up to 5 sample filenames + pixel dimensions of the loaded PNGs
- * so the user can verify classification and catch size outliers.
+ * One collapsible row in the category diagnostics list.
+ *
+ * When closed: shows the category name + loaded variant count.
+ * When opened: lazy-loads the full variant list from IndexedDB
+ * (via `listVariants`) and renders one checkbox per asset so the
+ * user can disable individual mis-classified or ugly variants
+ * without deleting the whole pack. Disabled variants stay in
+ * storage and can be re-enabled any time.
  */
-function CategoryRow({ category, diag }: { category: string; diag: AssetDiagCategory }) {
+function CategoryRow({
+    category,
+    diag,
+    listVariants,
+    toggleAsset,
+}: {
+    category: string;
+    diag: AssetDiagCategory;
+    listVariants: (category: AssetCategory) => Promise<AssetVariantRow[]>;
+    toggleAsset: (id: string, disabled: boolean) => Promise<void>;
+}) {
     const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<AssetVariantRow[] | null>(null);
+    const [loadingRows, setLoadingRows] = useState(false);
+
+    // Lazy-load the full variant list the first time the row is
+    // opened. Also re-loads when `diag.count` changes, so toggling
+    // a variant in another panel stays consistent.
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        setLoadingRows(true);
+        listVariants(category as AssetCategory).then(list => {
+            if (cancelled) return;
+            setRows(list);
+            setLoadingRows(false);
+        }).catch(() => {
+            if (!cancelled) setLoadingRows(false);
+        });
+        return () => { cancelled = true; };
+    }, [open, category, listVariants, diag.count]);
+
+    const onToggle = useCallback(async (id: string, newDisabled: boolean) => {
+        // Optimistic update so the checkbox flips immediately
+        setRows(prev => prev ? prev.map(r =>
+            r.id === id ? { ...r, disabled: newDisabled } : r,
+        ) : prev);
+        try {
+            await toggleAsset(id, newDisabled);
+        } catch (err) {
+            // On failure, revert the optimistic flip
+            setRows(prev => prev ? prev.map(r =>
+                r.id === id ? { ...r, disabled: !newDisabled } : r,
+            ) : prev);
+            console.error('Failed to toggle asset', id, err);
+        }
+    }, [toggleAsset]);
+
+    // Active = present in the loaded cache (diag.count). Total
+    // includes disabled variants, so the user sees "3/5 aktiv".
+    const activeCount = diag.count;
+    const totalCount = rows?.length ?? diag.count;
+
     return (
         <div className={`asset-diag-row ${open ? 'expanded' : ''}`}>
             <button
@@ -17,24 +77,38 @@ function CategoryRow({ category, diag }: { category: string; diag: AssetDiagCate
             >
                 <span className="asset-diag-caret">{open ? '▾' : '▸'}</span>
                 <span className="asset-diag-name">{category}</span>
-                <span className="asset-diag-count">{diag.count}</span>
+                <span className="asset-diag-count">
+                    {rows ? `${activeCount}/${totalCount}` : activeCount}
+                </span>
             </button>
             {open && (
-                <ul className="asset-diag-samples">
-                    {diag.samples.map((s, i) => (
-                        <li key={i}>
-                            <span className="asset-diag-file">{s.filename}</span>
-                            {s.width && s.height && (
-                                <span className="asset-diag-dim">{s.width}×{s.height}</span>
-                            )}
-                        </li>
-                    ))}
-                    {diag.count > diag.samples.length && (
-                        <li className="asset-diag-more">
-                            +{diag.count - diag.samples.length} weitere…
-                        </li>
+                <div className="asset-variant-list">
+                    {loadingRows && !rows && (
+                        <div className="asset-variant-loading">Lade Varianten…</div>
                     )}
-                </ul>
+                    {rows && rows.length === 0 && (
+                        <div className="asset-variant-empty">Keine Varianten.</div>
+                    )}
+                    {rows && rows.map(row => (
+                        <label
+                            key={row.id}
+                            className={`asset-variant-row ${row.disabled ? 'disabled' : ''}`}
+                            title={row.id}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={!row.disabled}
+                                onChange={(e) => onToggle(row.id, !e.target.checked)}
+                            />
+                            <span className="asset-variant-name">{row.filename}</span>
+                            {row.width && row.height && (
+                                <span className="asset-variant-dim">
+                                    {row.width}×{row.height}
+                                </span>
+                            )}
+                        </label>
+                    ))}
+                </div>
             )}
         </div>
     );
@@ -50,6 +124,10 @@ interface AssetPanelProps {
     onImport: (files: File[]) => Promise<void>;
     onTogglePack: (id: string, enabled: boolean) => Promise<void>;
     onDeletePack: (id: string) => Promise<void>;
+    /** Lazy-load the full variant list for one category. */
+    onListVariants: (category: AssetCategory) => Promise<AssetVariantRow[]>;
+    /** Flip a single variant's disabled flag. */
+    onToggleAsset: (id: string, disabled: boolean) => Promise<void>;
 }
 
 export function AssetPanel({
@@ -62,6 +140,8 @@ export function AssetPanel({
     onImport,
     onTogglePack,
     onDeletePack,
+    onListVariants,
+    onToggleAsset,
 }: AssetPanelProps) {
     const [dragging, setDragging] = useState(false);
 
@@ -188,7 +268,13 @@ export function AssetPanel({
                         {Object.entries(summary.diagnostics)
                             .sort((a, b) => b[1].count - a[1].count)
                             .map(([cat, diag]) => (
-                                <CategoryRow key={cat} category={cat} diag={diag} />
+                                <CategoryRow
+                                    key={cat}
+                                    category={cat}
+                                    diag={diag}
+                                    listVariants={onListVariants}
+                                    toggleAsset={onToggleAsset}
+                                />
                             ))}
                     </div>
                 </section>

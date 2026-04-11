@@ -1089,6 +1089,58 @@ body {
     justify-content: flex-start !important;
 }
 
+/* Per-variant checkbox list inside an expanded category row */
+
+.asset-variant-list {
+    padding: 4px 8px 8px 22px;
+    border-top: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.15);
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.asset-variant-loading,
+.asset-variant-empty {
+    font-size: 0.7em;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.asset-variant-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    font-size: 0.7em;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.asset-variant-row input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.asset-variant-row.disabled .asset-variant-name {
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+
+.asset-variant-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: monospace;
+}
+
+.asset-variant-dim {
+    color: var(--accent);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
 /* Skip-reason breakdown (collapsible after import) */
 
 .asset-skip-breakdown {

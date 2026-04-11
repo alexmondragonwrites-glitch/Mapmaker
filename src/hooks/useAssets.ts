@@ -1,8 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { getAssetStore, type PackRecord } from '../engine/assets-runtime';
+import { getAssetStore, type PackRecord, type AssetCategory } from '../engine/assets-runtime';
 import { importDrop, type ImportResult } from '../engine/assets-runtime/importer';
 import { autoLoadDevAssets } from '../engine/assets-runtime/devAutoLoader';
 import { invalidateBridgeCache } from '../engine/assets-runtime/bridge';
+
+/** One row in the "full variant list" view used by AssetPanel. */
+export interface AssetVariantRow {
+    id: string;
+    packId: string;
+    filename: string;
+    width?: number;
+    height?: number;
+    disabled: boolean;
+}
 
 export interface AssetDiagSample {
     filename: string;
@@ -132,6 +142,36 @@ export function useAssets() {
         }
     }, [refresh]);
 
+    /**
+     * Return the full variant list for a category (async so the UI
+     * can lazy-load it when the user expands a category row). Does
+     * not touch React state - the caller stores the rows locally.
+     */
+    const listVariants = useCallback(async (
+        category: AssetCategory,
+    ): Promise<AssetVariantRow[]> => {
+        await storeRef.current.open();
+        return storeRef.current.listAllAssets(category);
+    }, []);
+
+    /**
+     * Flip one asset's disabled flag and rebuild the cache so the
+     * next generate() uses the updated set. Kept on the hook so
+     * components don't have to reach for the raw store.
+     */
+    const toggleAsset = useCallback(async (
+        id: string,
+        disabled: boolean,
+    ): Promise<void> => {
+        setLoading(true);
+        try {
+            await storeRef.current.setAssetDisabled(id, disabled);
+            await refresh();
+        } finally {
+            setLoading(false);
+        }
+    }, [refresh]);
+
     return {
         packs,
         summary,
@@ -142,5 +182,7 @@ export function useAssets() {
         importFiles,
         togglePack,
         deletePack,
+        listVariants,
+        toggleAsset,
     };
 }
