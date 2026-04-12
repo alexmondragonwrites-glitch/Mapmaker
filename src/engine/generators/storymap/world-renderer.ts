@@ -1,17 +1,38 @@
 /**
  * World overview renderer for the Story Map.
  *
- * Draws the full Calyndra world on canvas:
- * - Terrain base with region-appropriate coloring
- * - Fog of war for unrevealed areas
- * - Routes between locations (SVG bezier paths)
- * - Location nodes (clickable)
- * - Character markers
- * - Supernatural indicators
- * - Labels
+ * Uses the SAME procedural terrain pipeline as the worldmap generator
+ * (heightmap, book-style terrain, hillshading, forests, mountains,
+ * rivers, coastlines) to produce a rich visual base. Then overlays
+ * the story-specific elements: fog of war, authored routes, location
+ * nodes with type-specific icons, character markers, supernatural
+ * indicators, and chapter-gated visibility.
  */
 
 import { SimplexNoise } from '../../noise';
+import { SeededRandom } from '../../../utils';
+import {
+    generateAdvancedHeightMap,
+    generateTemperatureMap,
+    generateAdvancedMoistureMap,
+    generateRiverSystems,
+    findMountainRidges,
+} from '../../terrain';
+import {
+    renderParchmentTexture,
+    renderHillshading,
+    renderWaterWaves,
+    renderHandDrawnCoastline,
+    renderPaintedForests,
+    renderVignette,
+    drawBookCompass,
+    drawBookBorder,
+} from '../../bookstyle';
+import { renderBookTerrainOverlay } from '../worldmap/styles';
+import { renderBookNaturalForests } from '../worldmap/features/forests';
+import { renderBookMountainRidges } from '../worldmap/features/mountains';
+import { renderRiverSystems } from '../worldmap/features/rivers';
+import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
 import { parseSVGPath, scalePoints, scaleCoord, drawPointPath } from './svg-path';
 import {
     getVisibleLocations,
@@ -24,6 +45,8 @@ import type { StoryWorldData, StoryLocation, Point } from './types';
 // The JSON viewBox dimensions
 const VIEW_W = 1000;
 const VIEW_H = 650;
+// Fixed seed for reproducible story world terrain
+const WORLD_SEED = 42;
 
 /**
  * Render the world overview map on the canvas.
@@ -42,11 +65,11 @@ export function renderWorldOverview(
     const showSupernatural = cfg.showSupernatural as boolean;
     const showLabels = cfg.showLabels as boolean;
 
-    // 1. Terrain base
-    renderTerrain(ctx, data, width, height);
+    // 1. Rich procedural terrain base (same as worldmap book style)
+    renderProceduralTerrain(ctx, width, height);
 
-    // 2. Region boundaries & fills
-    renderRegions(ctx, data, width, height);
+    // 2. Region tints from story data (forest darkening, etc.)
+    renderRegionOverlays(ctx, data, width, height);
 
     // 3. Fog of war (darken unrevealed areas)
     renderFogOfWar(ctx, data, chapter, width, height);
@@ -56,7 +79,7 @@ export function renderWorldOverview(
         renderWorldPaths(ctx, data, chapter, width, height);
     }
 
-    // 5. Location nodes
+    // 5. Location nodes with type-specific icons
     const visibleLocations = getVisibleLocations(data, chapter);
     renderLocationNodes(ctx, data, visibleLocations, chapter, width, height, showLabels);
 
@@ -70,67 +93,133 @@ export function renderWorldOverview(
         renderSupernaturalIndicators(ctx, data, visibleLocations, chapter, width, height);
     }
 
-    // 8. Map title
+    // 8. Border + compass + title
+    drawBookBorder(ctx, width, height, { color: '#3a2a18' });
+    drawBookCompass(ctx, width - 50, height - 55, 35, {});
     renderTitle(ctx, data, chapter, width);
 
-    // 9. Register clickable areas for zoom-in
+    // 9. Vignette for atmosphere
+    renderVignette(ctx, width, height, 0.25);
+
+    // 10. Register clickable areas for zoom-in
     if (zoomController) {
         registerClickableAreas(zoomController, visibleLocations, width, height);
     }
 }
 
-// ── Terrain ─────────────────────────────────────────────────────
+// ── Procedural Terrain ──────────────────────────────────────────
 
-function renderTerrain(
+function renderProceduralTerrain(
     ctx: CanvasRenderingContext2D,
-    data: StoryWorldData,
     width: number,
     height: number,
 ) {
-    // Dark base — the story map has a dark/mysterious aesthetic
-    ctx.fillStyle = '#0c1208';
-    ctx.fillRect(0, 0, width, height);
+    const rng = new SeededRandom(WORLD_SEED);
 
-    // Noise-based terrain texture
-    const noise = new SimplexNoise(42);
-    for (let y = 0; y < height; y += 3) {
-        for (let x = 0; x < width; x += 3) {
-            const n = noise.fbm(x / 200, y / 200, 3);
-            const brightness = 12 + n * 8;
-            const g = brightness * 1.3;
-            const r = brightness * 0.9;
-            const b = brightness * 0.7;
-            ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.fillRect(x, y, 3, 3);
-        }
-    }
+    // Terrain config matching the worldmap defaults
+    const terrainCfg = {
+        seed: WORLD_SEED,
+        width,
+        height,
+        scale: 3.5,
+        continentShape: 'archipelago',
+        seaLevel: 0.42,
+        mountainLevel: 0.72,
+        mapStyle: 'book',
+        forestDensity: 0.6,
+        riverCount: 4,
+    };
+
+    // Generate terrain data
+    const heightMap = generateAdvancedHeightMap(width, height, {
+        seed: WORLD_SEED,
+        scale: terrainCfg.scale,
+        continentShape: terrainCfg.continentShape,
+        seaLevel: terrainCfg.seaLevel,
+    });
+
+    const temperatureMap = generateTemperatureMap(
+        width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
+    );
+
+    const moistureMap = generateAdvancedMoistureMap(
+        width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
+    );
+
+    // Parchment base texture
+    renderParchmentTexture(ctx, width, height, WORLD_SEED);
+
+    // Book-style terrain overlay (land colors, sea, biomes)
+    renderBookTerrainOverlay(ctx, terrainCfg, heightMap, moistureMap);
+
+    // Hillshading for depth
+    renderHillshading(ctx, width, height, heightMap, {
+        strength: 0.35,
+        ambient: 0.35,
+    });
+
+    // Water wave pattern
+    renderWaterWaves(ctx, width, height, heightMap, terrainCfg.seaLevel, {
+        waveSpacing: 6,
+        waveColor: 'rgba(40, 60, 100, 0.25)',
+    });
+
+    // River systems
+    const riverSystems = generateRiverSystems(
+        width, height, heightMap, terrainCfg.seaLevel,
+        terrainCfg.mountainLevel, rng, terrainCfg.riverCount,
+    );
+    renderRiverSystems(ctx, terrainCfg, riverSystems);
+
+    // Hand-drawn coastline
+    renderHandDrawnCoastline(ctx, width, height, heightMap, terrainCfg.seaLevel, {
+        hachureLines: true,
+        hachureLength: 8,
+        hachureDensity: 0.12,
+    });
+
+    // Painted forests (mass fills)
+    renderPaintedForests(
+        ctx, width, height, heightMap, moistureMap, temperatureMap,
+        terrainCfg.seaLevel, terrainCfg.mountainLevel,
+        terrainCfg.forestDensity, WORLD_SEED,
+    );
+
+    // Individual trees at forest edges
+    renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
+
+    // Mountain ridges
+    const ridgePoints = findMountainRidges(
+        width, height, heightMap, terrainCfg.mountainLevel, rng,
+    );
+    renderBookMountainRidges(ctx, terrainCfg, ridgePoints, rng);
 }
 
-// ── Regions ─────────────────────────────────────────────────────
+// ── Region Overlays ─────────────────────────────────────────────
 
-function renderRegions(
+function renderRegionOverlays(
     ctx: CanvasRenderingContext2D,
     data: StoryWorldData,
     width: number,
     height: number,
 ) {
+    // Tint story-specific regions on top of procedural terrain
     for (const region of data.featureRegions) {
         if (!region.svgPath) continue;
 
         const points = parseSVGPath(region.svgPath);
         const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
 
-        // Fill color based on region type
         let fillColor: string;
         switch (region.type) {
-            case 'forest':
-                fillColor = 'rgba(17, 34, 9, 0.6)';
-                break;
             case 'darkwood':
-                fillColor = 'rgba(5, 9, 16, 0.8)';
+                fillColor = 'rgba(5, 9, 16, 0.5)';
+                break;
+            case 'forest':
+                fillColor = 'rgba(10, 25, 5, 0.25)';
                 break;
             default:
-                fillColor = 'rgba(20, 30, 15, 0.3)';
+                continue; // other regions don't need extra tinting
         }
 
         ctx.save();
@@ -149,28 +238,14 @@ function renderRegions(
         const sRy = (ry / VIEW_H) * height;
 
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(sRx, sRy));
-        gradient.addColorStop(0, 'rgba(120, 130, 140, 0.15)');
-        gradient.addColorStop(0.6, 'rgba(100, 110, 120, 0.08)');
-        gradient.addColorStop(1, 'rgba(80, 90, 100, 0)');
+        gradient.addColorStop(0, 'rgba(180, 190, 200, 0.12)');
+        gradient.addColorStop(0.6, 'rgba(160, 170, 180, 0.06)');
+        gradient.addColorStop(1, 'rgba(140, 150, 160, 0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.ellipse(p.x, p.y, sRx, sRy, 0, 0, Math.PI * 2);
         ctx.fill();
-    }
-
-    // Hills
-    for (const hill of data.hills) {
-        for (const shape of hill.shapes) {
-            const p = scaleCoord(shape.cx, shape.cy, VIEW_W, VIEW_H, width, height);
-            const rx = (shape.rx / VIEW_W) * width;
-            const ry = (shape.ry / VIEW_H) * height;
-
-            ctx.fillStyle = `rgba(60, 80, 40, ${shape.opacity * 0.3})`;
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-        }
     }
 }
 
@@ -197,12 +272,11 @@ function renderFogOfWar(
             VIEW_W, VIEW_H, width, height,
         );
 
-        // Dark fog circle with noisy edges
-        const radius = 60 + noise.noise2D(p.x / 100, p.y / 100) * 20;
+        const radius = 80 + noise.noise2D(p.x / 100, p.y / 100) * 30;
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
-        gradient.addColorStop(0, 'rgba(5, 5, 8, 0.9)');
-        gradient.addColorStop(0.7, 'rgba(5, 5, 8, 0.5)');
-        gradient.addColorStop(1, 'rgba(5, 5, 8, 0)');
+        gradient.addColorStop(0, 'rgba(20, 16, 12, 0.85)');
+        gradient.addColorStop(0.5, 'rgba(20, 16, 12, 0.5)');
+        gradient.addColorStop(1, 'rgba(20, 16, 12, 0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -225,12 +299,10 @@ function renderWorldPaths(
     );
 
     for (const path of data.worldPaths) {
-        // Only show paths where both endpoints are revealed
         if (!visibleIds.has(path.from) || !visibleIds.has(path.to)) continue;
 
         const points = parseSVGPath(path.svgPath);
         const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
-
         if (scaled.length === 0) continue;
 
         ctx.save();
@@ -268,48 +340,143 @@ function renderLocationNodes(
         );
         const destroyed = isLocationDestroyed(loc, chapter);
 
-        // Node glow
-        const glowColor = destroyed ? 'rgba(200, 60, 40, 0.3)' : 'rgba(196, 135, 58, 0.3)';
-        const glowRadius = loc.type === 'village' ? 20 : 14;
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowRadius);
-        gradient.addColorStop(0, glowColor);
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Node dot
-        const nodeRadius = loc.type === 'village' ? 6 : 4;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, nodeRadius, 0, Math.PI * 2);
-        ctx.fillStyle = destroyed ? '#c83828' : '#c4873a';
-        ctx.fill();
-        ctx.strokeStyle = destroyed ? '#801810' : '#8a5a1a';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Inner highlight
-        ctx.beginPath();
-        ctx.arc(p.x, p.y - 1, nodeRadius * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = destroyed ? 'rgba(255, 120, 80, 0.5)' : 'rgba(255, 220, 150, 0.5)';
-        ctx.fill();
+        // Type-specific icon rendering
+        ctx.save();
+        if (destroyed) {
+            ctx.globalAlpha = 0.6;
+        }
+        renderLocationIcon(ctx, loc, p.x, p.y, destroyed);
+        ctx.restore();
 
         // Label
         if (showLabels) {
             ctx.save();
-            ctx.font = loc.type === 'village' ? 'bold 11px "Palatino Linotype", serif'
+            ctx.font = loc.type === 'village'
+                ? 'bold 11px "Palatino Linotype", serif'
                 : '10px "Palatino Linotype", serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
 
+            const labelY = p.y + getLabelOffset(loc.type);
+
             // Shadow for readability
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillText(loc.name.de, p.x + 1, p.y + nodeRadius + 5);
+            ctx.fillText(loc.name.de, p.x + 1, labelY + 1);
             ctx.fillStyle = destroyed ? '#c87868' : '#e8dcc8';
-            ctx.fillText(loc.name.de, p.x, p.y + nodeRadius + 4);
+            ctx.fillText(loc.name.de, p.x, labelY);
             ctx.restore();
         }
+    }
+}
+
+function getLabelOffset(type: string): number {
+    switch (type) {
+        case 'village': return 18;
+        case 'farm': return 14;
+        case 'water': return 12;
+        default: return 10;
+    }
+}
+
+function renderLocationIcon(
+    ctx: CanvasRenderingContext2D,
+    loc: StoryLocation,
+    x: number,
+    y: number,
+    destroyed: boolean,
+) {
+    switch (loc.type) {
+        case 'village':
+            // Cluster of small houses
+            drawHumanHouse(ctx, x - 8, y - 4, 10, {});
+            drawHumanHouse(ctx, x + 4, y - 6, 8, {});
+            drawHumanHouse(ctx, x - 2, y + 2, 9, {});
+            if (destroyed) {
+                renderDestroyedOverlay(ctx, x, y, 18);
+            }
+            break;
+        case 'farm':
+            // Single farmhouse with fence
+            drawHumanHouse(ctx, x - 4, y - 4, 10, {});
+            ctx.strokeStyle = '#8a7a5a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - 10, y + 2, 20, 8);
+            if (destroyed) renderDestroyedOverlay(ctx, x, y, 14);
+            break;
+        case 'water':
+            // Blue circle (pond)
+            ctx.beginPath();
+            ctx.ellipse(x, y, 10, 7, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(60, 100, 140, 0.6)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(80, 120, 160, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            break;
+        case 'landmark':
+            // Large tree
+            drawTree(ctx, x, y - 6, 16, {});
+            break;
+        case 'hollow':
+            // Dark depression
+            ctx.beginPath();
+            ctx.ellipse(x, y, 9, 6, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(40, 30, 20, 0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(80, 60, 40, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            break;
+        case 'shelter':
+            // Small shelter / burrow entrance
+            ctx.beginPath();
+            ctx.arc(x, y, 6, Math.PI, 0);
+            ctx.fillStyle = 'rgba(60, 50, 30, 0.7)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(100, 80, 50, 0.8)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            break;
+        case 'cabin':
+            // Single cabin
+            drawHumanHouse(ctx, x - 5, y - 5, 11, {});
+            break;
+        case 'darkwood':
+            // Dark, menacing trees
+            ctx.globalAlpha = 0.7;
+            drawTree(ctx, x - 5, y - 4, 12, {});
+            drawTree(ctx, x + 3, y - 6, 14, {});
+            ctx.globalAlpha = 1;
+            break;
+        default:
+            // Fallback dot
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#c4873a';
+            ctx.fill();
+    }
+}
+
+function renderDestroyedOverlay(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+    // Red-tinted smoke/ruin indicator
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, 'rgba(200, 60, 30, 0.3)');
+    gradient.addColorStop(0.6, 'rgba(100, 30, 15, 0.15)');
+    gradient.addColorStop(1, 'rgba(60, 20, 10, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Smoke wisps
+    ctx.strokeStyle = 'rgba(120, 100, 80, 0.3)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+        const sx = x - 6 + i * 6;
+        ctx.beginPath();
+        ctx.moveTo(sx, y - 4);
+        ctx.bezierCurveTo(sx - 2, y - 10, sx + 3, y - 16, sx - 1, y - 22);
+        ctx.stroke();
     }
 }
 
@@ -332,16 +499,14 @@ function renderCharacterMarkers(
             VIEW_W, VIEW_H, width, height,
         );
 
-        // Fan characters around the location node
-        const spread = 12;
-        const startAngle = -Math.PI / 2 - ((chars.length - 1) * 0.3) / 2;
+        const spread = 14;
+        const startAngle = -Math.PI / 2 - ((chars.length - 1) * 0.35) / 2;
 
         for (let i = 0; i < chars.length; i++) {
-            const angle = startAngle + i * 0.3;
+            const angle = startAngle + i * 0.35;
             const cx = base.x + Math.cos(angle) * spread;
             const cy = base.y + Math.sin(angle) * spread;
 
-            // Character dot with their color
             ctx.beginPath();
             ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
             ctx.fillStyle = chars[i].colors.primary;
@@ -372,24 +537,22 @@ function renderSupernaturalIndicators(
             VIEW_W, VIEW_H, width, height,
         );
 
-        // Pulsing glow around locations with supernatural activity
         const pulseRadius = 25 + effects.length * 5;
 
-        // Determine color based on effect types
-        let glowR = 100, glowG = 60, glowB = 180; // default: purple
+        let glowR = 100, glowG = 60, glowB = 180;
         for (const eff of effects) {
             if (eff.id.includes('red') || eff.id.includes('veinlight') || eff.id.includes('stillbrand')) {
-                glowR = 180; glowG = 40; glowB = 40; // red
+                glowR = 180; glowG = 40; glowB = 40;
             } else if (eff.id.includes('blue') || eff.id.includes('healing')) {
-                glowR = 60; glowG = 120; glowB = 220; // blue
+                glowR = 60; glowG = 120; glowB = 220;
             } else if (eff.id.includes('oak') || eff.id.includes('gray')) {
-                glowR = 160; glowG = 140; glowB = 60; // golden
+                glowR = 160; glowG = 140; glowB = 60;
             }
         }
 
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, pulseRadius);
-        gradient.addColorStop(0, `rgba(${glowR}, ${glowG}, ${glowB}, 0.15)`);
-        gradient.addColorStop(0.5, `rgba(${glowR}, ${glowG}, ${glowB}, 0.05)`);
+        gradient.addColorStop(0, `rgba(${glowR}, ${glowG}, ${glowB}, 0.2)`);
+        gradient.addColorStop(0.5, `rgba(${glowR}, ${glowG}, ${glowB}, 0.07)`);
         gradient.addColorStop(1, `rgba(${glowR}, ${glowG}, ${glowB}, 0)`);
 
         ctx.fillStyle = gradient;
@@ -410,27 +573,23 @@ function renderTitle(
     const title = data.meta.mapTitle;
     const chapterLabel = chapter === 0 ? 'Prolog' : `Kapitel ${chapter}`;
 
-    // Title bar background
-    ctx.fillStyle = 'rgba(10, 8, 6, 0.8)';
-    ctx.fillRect(0, 0, width, 44);
-    ctx.strokeStyle = 'rgba(196, 135, 58, 0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, 44);
-    ctx.lineTo(width, 44);
-    ctx.stroke();
-
-    // Title text
+    ctx.save();
     ctx.font = 'small-caps bold 16px "Palatino Linotype", serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#c4873a';
-    ctx.fillText(title, width / 2, 18);
+    ctx.textBaseline = 'top';
 
-    // Chapter indicator
+    // Text shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillText(title, width / 2 + 1, 13);
+    ctx.fillStyle = '#c4873a';
+    ctx.fillText(title, width / 2, 12);
+
     ctx.font = '11px "Palatino Linotype", serif';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillText(chapterLabel, width / 2 + 1, 31);
     ctx.fillStyle = '#9a8a6a';
-    ctx.fillText(chapterLabel, width / 2, 34);
+    ctx.fillText(chapterLabel, width / 2, 30);
+    ctx.restore();
 }
 
 // ── Clickable Areas ─────────────────────────────────────────────
@@ -451,7 +610,7 @@ function registerClickableAreas(
             VIEW_W, VIEW_H, width, height,
         );
 
-        const clickRadius = loc.type === 'village' ? 20 : 14;
+        const clickRadius = loc.type === 'village' ? 22 : 16;
 
         zoomController.registerClickableArea({
             shape: 'circle',
@@ -463,7 +622,7 @@ function registerClickableAreas(
             targetData: {
                 name: loc.name.de,
                 id: loc.id,
-                seed: 42,       // story maps use a fixed seed
+                seed: WORLD_SEED,
                 size: loc.type === 'village' ? 'medium' : 'small',
                 style: 'human',
             },
