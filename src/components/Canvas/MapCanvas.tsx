@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent, type MouseEvent as RMouseEvent } from 'react';
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 
 interface MapCanvasProps {
     onCanvasReady: (canvas: HTMLCanvasElement) => void;
@@ -47,10 +47,6 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         startPanY: number;
         pointerId: number;
     } | null>(null);
-    // When a drag-pan happened, suppress the next click so it doesn't
-    // bubble into canvas click listeners (zoom-to-city etc.).
-    const suppressClickRef = useRef(false);
-
     // Notify parent whenever the view changes
     useEffect(() => {
         onViewChange?.({ zoom, panX, panY });
@@ -119,6 +115,19 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         // Don't start a drag on the canvas element itself if another
         // handler (e.g. battle map token placement) is going to claim
         // the click. We let the event bubble so child handlers run first.
+        //
+        // IMPORTANT: we do NOT call setPointerCapture here. Pointer
+        // capture redirects ALL mouse events (including click) to the
+        // capture target. Since useZoom attaches a native click
+        // handler directly to the canvas element, capturing the
+        // pointer on the wrapper would cause click events to fire on
+        // the wrapper instead, completely bypassing the canvas handler
+        // and breaking click-to-zoom-into-city.
+        //
+        // Instead we defer setPointerCapture to handlePointerMove,
+        // only once the drag threshold is exceeded. Clean clicks
+        // (< 6 px movement) never set capture, so their click event
+        // fires naturally on the canvas element.
 
         dragStateRef.current = {
             dragging: true,
@@ -129,7 +138,6 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             startPanY: panY,
             pointerId: e.pointerId,
         };
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     }, [panX, panY]);
 
     const handlePointerMove = useCallback((e: RPointerEvent<HTMLDivElement>) => {
@@ -141,6 +149,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         // Only start panning after a small threshold so tiny clicks still
         // pass through to the canvas click handlers
         if (Math.hypot(dx, dy) < 6) return;
+
+        // Set pointer capture on first real drag move so we keep
+        // tracking even if the pointer leaves the wrapper.
+        if (!state.moved) {
+            try {
+                (e.currentTarget as HTMLElement).setPointerCapture(state.pointerId);
+            } catch { /* ignore */ }
+        }
         state.moved = true;
 
         setPanX(state.startPanX + dx);
@@ -150,9 +166,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     const handlePointerUp = useCallback((e: RPointerEvent<HTMLDivElement>) => {
         const state = dragStateRef.current;
         if (!state) return;
-        try {
-            (e.currentTarget as HTMLElement).releasePointerCapture(state.pointerId);
-        } catch { /* ignore */ }
+        // Release capture if it was set (only happens after drag threshold)
+        if (state.moved) {
+            try {
+                (e.currentTarget as HTMLElement).releasePointerCapture(state.pointerId);
+            } catch { /* ignore */ }
+        }
 
         // Clean click (no drag) - fire onCanvasClick with normalized
         // canvas coordinates. We convert client -> wrapper -> world
@@ -173,22 +192,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             }
         }
 
-        if (state.moved) {
-            suppressClickRef.current = true;
-        }
         dragStateRef.current = null;
     }, [onCanvasClick, panX, panY, zoom, width, height]);
-
-    // Capture click before the native canvas click handler from
-    // useZoom runs. If the user just panned, swallow this click.
-    const handleClickCapture = useCallback((e: RMouseEvent<HTMLDivElement>) => {
-        // eslint-disable-next-line no-console
-        console.log('[MapCanvas.handleClickCapture] fired', { suppress: suppressClickRef.current });
-        if (!suppressClickRef.current) return;
-        suppressClickRef.current = false;
-        e.preventDefault();
-        e.stopPropagation();
-    }, []);
 
     // ── Double click to reset ───────────────────────────────────────
 
@@ -247,7 +252,6 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            onClickCapture={handleClickCapture}
             onDoubleClick={handleDoubleClick}
             style={{ touchAction: 'none' }}
         >

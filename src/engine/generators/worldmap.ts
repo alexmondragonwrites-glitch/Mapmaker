@@ -343,8 +343,6 @@ export class WorldMapGenerator {
         // Register clickable areas for zoom if zoom controller exists
         if (_zoomController) {
             _zoomController.clearClickableAreas();
-            // eslint-disable-next-line no-console
-            console.log('[worldmap.generate] registering clickable areas', { cityCount: cities.length });
 
             // Cities are clickable → zoom to city map
             for (const city of cities) {
