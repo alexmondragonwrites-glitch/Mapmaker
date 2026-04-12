@@ -176,12 +176,26 @@ export default function App() {
       if (cityGen && activeGenerator?.id !== 'citymap') {
         switchGenerator('citymap');
       }
-      // Override seed and city name via config if available
+      // Pass the worldmap's city attributes into the citymap config
+      // so the generated citymap shows the correct name, size, and
+      // architectural style instead of inventing its own.
       if (zoom.data.seed !== undefined) {
         updateConfig('seed', zoom.data.seed);
       }
       if (zoom.data.id) {
         updateConfig('loreCityId', zoom.data.id);
+      }
+      if (zoom.data.name) {
+        updateConfig('_cityName', zoom.data.name);
+      }
+      if (zoom.data.size) {
+        updateConfig('citySize', zoom.data.size);
+      }
+      if (zoom.data.style) {
+        updateConfig('style', zoom.data.style);
+      }
+      if (zoom.data.isCapital) {
+        updateConfig('hasCastle', true);
       }
     } else if (zoom.level === 'world' && activeGenerator?.id !== 'worldmap') {
       switchGenerator('worldmap');

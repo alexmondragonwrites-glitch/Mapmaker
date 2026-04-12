@@ -125,7 +125,7 @@ export class CityMapGenerator {
         const rng = new SeededRandom(cfg.seed);
         const names = new NameGenerator(cfg.seed);
 
-        const cityName = cfg._loreName || names.generate('city');
+        const cityName = cfg._cityName || cfg._loreName || names.generate('city');
         // Package C1: layout primitives live in citymap/layout.ts now.
         // This class just wires them up with the local rng/noise/config.
         const cityRadius = getCityRadius(cfg);
