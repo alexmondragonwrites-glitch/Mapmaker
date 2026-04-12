@@ -9,6 +9,8 @@ import { usePlacedAssets, type PlacedAsset } from './hooks/usePlacedAssets';
 import { useZoom } from './hooks/useZoom';
 import { useDebouncedValue } from './hooks/useDebouncedValue';
 import { setWorldMapZoom } from './engine/generators/worldmap';
+import { setStoryMapData, setStoryMapZoom } from './engine/generators/storymap/storymap-generator';
+import { loadWorldData } from './engine/generators/storymap/data-loader';
 import { renderPlacedAssets } from './engine/placed-assets';
 import { exportCanvasAsPNG } from './utils';
 import type { ActivePanel } from './components/Sidebar/TabBar';
@@ -101,10 +103,17 @@ export default function App() {
     mapCanvasRef.current?.resetView();
   }, []);
 
-  // Pass the zoom controller to the worldmap generator once on mount
+  // Pass the zoom controller to the worldmap and storymap generators
   useEffect(() => {
     setWorldMapZoom(zoom.controller);
+    setStoryMapZoom(zoom.controller);
   }, [zoom.controller]);
+
+  // Load the Calyndra world data for the story map generator
+  useEffect(() => {
+    const data = loadWorldData();
+    setStoryMapData(data);
+  }, []);
 
   // Register the placed-assets overlay as the generator's after-hook.
   // Reads from the *latest* placements via a ref-like closure so the

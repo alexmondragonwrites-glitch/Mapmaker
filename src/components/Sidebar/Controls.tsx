@@ -1,4 +1,5 @@
 import type { GeneratorControl, GeneratorConfig } from '../../engine/types';
+import { ChapterSlider } from './ChapterSlider';
 
 interface ControlsProps {
   controls: GeneratorControl[];
@@ -10,6 +11,19 @@ export function Controls({ controls, config, onUpdate }: ControlsProps) {
   return (
     <div className="controls-list">
       {controls.map(ctrl => {
+        if (ctrl.type === 'custom' && (ctrl as any).renderer === 'chapterSlider') {
+          return (
+            <div className="control-group" key={ctrl.key}>
+              <label>{ctrl.label}</label>
+              <ChapterSlider
+                value={config[ctrl.key] as number ?? 0}
+                min={(ctrl as any).min ?? 0}
+                max={(ctrl as any).max ?? 7}
+                onUpdate={v => onUpdate(ctrl.key, v)}
+              />
+            </div>
+          );
+        }
         if (ctrl.type === 'custom') return null;
         return <ControlItem key={ctrl.key} control={ctrl} value={config[ctrl.key]} onUpdate={onUpdate} />;
       })}

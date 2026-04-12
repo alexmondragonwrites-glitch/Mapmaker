@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { GeneratorRegistry, WorldMapGenerator, CityMapGenerator, BattleMapGenerator } from '../engine';
+import { GeneratorRegistry, WorldMapGenerator, CityMapGenerator, BattleMapGenerator, StoryMapGenerator } from '../engine';
 import type { GeneratorEntry, GeneratorConfig } from '../engine';
 
 /**
@@ -83,6 +83,7 @@ export function useGenerator() {
     registry.register(WorldMapGenerator as any);
     registry.register(CityMapGenerator as any);
     registry.register(BattleMapGenerator as any);
+    registry.register(StoryMapGenerator as any);
     registryRef.current = registry;
 
     const all = registry.getAll();

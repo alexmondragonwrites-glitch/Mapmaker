@@ -170,7 +170,7 @@
         { "id": "woodpile", "type": "feature", "position": { "x": 345, "y": 220, "w": 18, "h": 12 }, "label": { "de": "Holzstapel", "en": "Woodpile" }, "minChapter": 0 },
         { "id": "spring", "type": "well", "position": { "x": 200, "y": 280, "w": 16, "h": 12 }, "label": { "de": "Quelle", "en": "Spring" }, "minChapter": 0 },
         { "id": "training", "type": "clearing", "position": { "x": 370, "y": 290, "w": 50, "h": 35 }, "label": { "de": "Übungsplatz", "en": "Training Ground" }, "minChapter": 0 },
-        { "id": "hearth", "type": "hearth", "position": { "x": 275, "y": 215, "w": 20, "h": 16 }, "label": { "de": "Feuerstelle", "en": "Hearth" }, "description": { "de": "Am Kamin raucht Corin Walters Pfeife. „Auf Walter."", "en": "At the hearth, Corin smokes Walter's pipe. \"To Walter.\"" }, "minChapter": 5 },
+        { "id": "hearth", "type": "hearth", "position": { "x": 275, "y": 215, "w": 20, "h": 16 }, "label": { "de": "Feuerstelle", "en": "Hearth" }, "description": { "de": "Am Kamin raucht Corin Walters Pfeife. \u201EAuf Walter.\u201C", "en": "At the hearth, Corin smokes Walter's pipe. \"To Walter.\"" }, "minChapter": 5 },
         { "id": "lookout", "type": "guard", "position": { "x": 160, "y": 150, "w": 14, "h": 18 }, "label": { "de": "Ausguck", "en": "Lookout" }, "minChapter": 0 },
         { "id": "storage", "type": "storage", "position": { "x": 340, "y": 195, "w": 20, "h": 16 }, "label": { "de": "Vorratslager", "en": "Storage" }, "minChapter": 0 }
       ]
