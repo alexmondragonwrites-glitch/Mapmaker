@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "project": "Calyndra",
+    "book": "Buch Eins / Book One",
+    "mapTitle": "Westliche Gefilde · Calyndra",
+    "mapViewBox": { "width": 1000, "height": 650 },
+    "generatedFrom": "tales-dashboard codebase",
+    "languages": ["de", "en"]
+  },
+  "regions": [
+    {
+      "id": "kingdom-calyndra",
+      "name_de": "Königreich Calyndra",
+      "name_en": "Kingdom of Calyndra",
+      "type": "kingdom",
+      "labelPosition": { "x": 870, "y": 450 },
+      "description_de": "Das östliche Königreich — Schauplatz der Handlung.",
+      "description_en": "The eastern kingdom — setting of the story."
+    },
+    {
+      "id": "waldmeer-thalmor",
+      "name_de": "Waldmeer von Thalmor",
+      "name_en": "Forest Sea of Thalmor",
+      "type": "forest",
+      "labelPosition": { "x": 310, "y": 95 },
+      "description_de": "Riesiger, uralter Wald. Enthält den Spiegelteich, die Alte Eiche, den Fuchsbau und ein Netz verborgener Pfade.",
+      "description_en": "Vast, ancient forest. Contains the Mirror Pond, the Ancient Oak, the Root Hollow, and a network of hidden paths.",
+      "boundary": "M 148,0 L 548,0 C 558,55 562,110 555,165 C 548,220 562,275 554,330 C 546,385 530,435 518,485 C 506,535 488,580 468,620 C 455,638 445,648 435,650 L 148,650 Z",
+      "climate": "dicht bewaldet, Zwielicht selbst am Tag, feucht",
+      "climate_en": "densely wooded, twilight even in daytime, damp"
+    },
+    {
+      "id": "thalanor-darkwood",
+      "name_de": "Thalanor — Der Dunkelwald",
+      "name_en": "Thalanor — The Dark Wood",
+      "type": "dark_forest",
+      "labelPosition": { "x": 82, "y": 95 },
+      "description_de": "Jenseits dieser Schwelle enden die alten Karten. Das Waldmeer von Thalanor — von keinem Kartografen vollständig verzeichnet.",
+      "description_en": "Beyond this threshold, the old maps end. The forest sea of Thalanor — never fully charted by any cartographer.",
+      "boundary": "M 0,0 L 152,0 C 158,55 162,110 154,165 C 146,220 160,275 152,330 C 144,385 158,440 150,495 C 144,535 152,580 148,635 L 148,650 L 0,650 Z",
+      "climate": "dunkel, kalt, feindlich, unbekannt",
+      "climate_en": "dark, cold, hostile, unknown"
+    },
+    {
+      "id": "nebelfelder-lyrn",
+      "name_de": "Nebelfelder von Lyrn",
+      "name_en": "Mist Fields of Lyrn",
+      "type": "mist_plains",
+      "labelPosition": { "x": 695, "y": 400 },
+      "description_de": "Nebelbedeckte Ebenen südöstlich von Alwins Gehöft. Natürliche Grenze zwischen Weideland und tiefem Wald.",
+      "description_en": "Mist-covered plains southeast of Alwin's Farm. Natural boundary between pastureland and deep forest.",
+      "fogArea": { "cx": 690, "cy": 385, "rx": 130, "ry": 80 },
+      "climate": "neblig, feucht, gedämpftes Licht",
+      "climate_en": "foggy, damp, muted light"
+    },
+    {
+      "id": "grenzforst",
+      "name_de": "Grenzforst",
+      "name_en": "Border Forest",
+      "type": "transitional_forest",
+      "description_de": "Übergangszone zwischen Waldmeer und Dunkelwald. Enthält Nebelruh (Walters Jagdhütte) und den Nebelpfad.",
+      "description_en": "Transition zone between the Forest Sea and the Dark Wood. Contains Mistrest (Walter's Cabin) and the Mist Path.",
+      "climate": "neblig, kühl, natürliche Tarnung durch Nebel",
+      "climate_en": "misty, cool, natural concealment through fog"
+    },
+    {
+      "id": "weideland",
+      "name_de": "Weideland",
+      "name_en": "Pastures",
+      "type": "pastoral",
+      "description_de": "Hügeliges Weideland nördlich von Alwins Gehöft. Offenes Terrain mit Blick auf die Nebelfelder.",
+      "description_en": "Rolling pastureland north of Alwin's Farm. Open terrain overlooking the Mist Fields.",
+      "hills": [
+        { "cx": 580, "cy": 175, "rx": 80, "ry": 28 },
+        { "cx": 620, "cy": 190, "rx": 65, "ry": 22 },
+        { "cx": 555, "cy": 200, "rx": 55, "ry": 18 }
+      ],
+      "climate": "offen, windig, gutes Weideland",
+      "climate_en": "open, windy, good pastureland"
+    }
+  ]
+}

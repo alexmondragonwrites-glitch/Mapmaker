@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "title": "Calyndra — Wege & Verbindungen",
+    "description": "Alle Wege, Routen und Verbindungen zwischen Orten",
+    "version": "1.0",
+    "generated": "2026-04-12"
+  },
+  "worldPaths": [
+    { "id": "pilgrim-road", "from": "willow-brook", "to": "alwin-farm", "name": { "de": "Pilgerstraße", "en": "Pilgrim's Road" }, "style": { "stroke": "#c9a84c", "dash": null, "width": 2 }, "svgPath": "M 800,292 C 738,284 676,257 637,240 C 619,233 608,224 597,215", "description": { "de": "Die alte Pilgerstraße — goldener Hauptweg zwischen dem Dorf und dem Gehöft.", "en": "The old pilgrim's road — golden main route between the village and the farm." } },
+    { "id": "path-to-forest", "from": "alwin-farm", "to": "spiegelteich", "name": { "de": "Weg zum Wald", "en": "Path to Forest" }, "style": { "stroke": "#b09050", "dash": "6,4", "width": 1.5 }, "svgPath": "M 597,215 C 572,221 550,234 530,246 C 508,260 488,270 465,276", "description": { "de": "Ein getretener Pfad vom Gehöft Richtung Waldmeer.", "en": "A worn path from the farm toward the forest sea." } },
+    { "id": "trail-to-spiegelteich", "from": "alwin-farm", "to": "spiegelteich", "name": { "de": "Pfad zum Spiegelteich", "en": "Trail to Mirror Pond" }, "style": { "stroke": "#7a9a5a", "dash": "5,4", "width": 1.2 }, "svgPath": "M 465,276 C 444,279 425,281 400,282", "description": { "de": "Fortsetzung des Waldpfads bis zum Spiegelteich.", "en": "Continuation of the forest path to the Mirror Pond." } },
+    { "id": "trail-to-fuchsbau", "from": "spiegelteich", "to": "fuchsbau", "name": { "de": "Pfad zum Fuchsbau", "en": "Trail to Root Hollow" }, "style": { "stroke": "#6a8a50", "dash": "4,4", "width": 1.2 }, "svgPath": "M 400,282 C 368,270 325,254 265,245", "description": { "de": "Ein kaum sichtbarer Trampelpfad durch dichtes Unterholz.", "en": "A barely visible trail through dense undergrowth." } },
+    { "id": "trail-to-alte-eiche", "from": "spiegelteich", "to": "alte-eiche", "name": { "de": "Pfad zur Alten Eiche", "en": "Trail to the Ancient Oak" }, "style": { "stroke": "#6a8a50", "dash": "4,4", "width": 1.2 }, "svgPath": "M 400,282 C 386,316 372,350 357,382", "description": { "de": "Ein schmaler Pfad südwärts durch das Waldmeer.", "en": "A narrow path southward through the forest sea." } },
+    { "id": "trail-to-rotader-senke", "from": "alte-eiche", "to": "rotader-senke", "name": { "de": "Pfad zur Rotader Senke", "en": "Trail to Red Vein Hollow" }, "style": { "stroke": "#5a7848", "dash": "3,5", "width": 1 }, "svgPath": "M 357,382 C 340,410 328,428 312,445", "description": { "de": "Die Wurzelstränge der Eiche führen hinab in die Senke.", "en": "The oak's root strands lead down into the hollow." } },
+    { "id": "mist-path", "from": "fuchsbau", "to": "nebelruh", "name": { "de": "Nebelpfad", "en": "Mist Path" }, "style": { "stroke": "#5a7848", "dash": "4,5", "width": 1 }, "svgPath": "M 265,245 C 244,280 220,316 204,340 C 198,347 194,350 190,350", "description": { "de": "Ein nebelverhangener Pfad durch den Grenzforst.", "en": "A mist-shrouded path through the border forest." } },
+    { "id": "trail-to-waldsenke", "from": "nebelruh", "to": "waldsenke", "name": { "de": "Pfad zur Waldsenke", "en": "Trail to Kettle Hollow" }, "style": { "stroke": "#4a6840", "dash": "3,6", "width": 0.9 }, "svgPath": "M 190,350 C 176,394 162,434 150,475", "description": { "de": "Ein dünner Pfad südwärts in die Tiefe.", "en": "A thin path southward into the depths." } },
+    { "id": "trail-to-darkwood", "from": "nebelruh", "to": "darkwood", "name": { "de": "Pfad zum Dunkelwald", "en": "Trail to the Dark Wood" }, "style": { "stroke": "#8a4848", "dash": "4,5", "width": 1 }, "svgPath": "M 190,350 C 155,344 120,337 75,328", "description": { "de": "Ein bedrohlicher Pfad westwärts zur Schwelle des Dunkelwalds.", "en": "A menacing path westward to the threshold of the Dark Wood." } }
+  ],
+  "localPaths": {
+    "willow-brook": [
+      { "id": "wb-main-road", "type": "main", "svgPath": "M 0,320 C 60,310 120,300 180,295 C 240,290 280,295 320,310 C 380,330 440,340 500,330 C 540,325 570,310 600,300", "name": { "de": "Hauptstraße", "en": "Main Road" } },
+      { "id": "wb-temple-path", "type": "secondary", "svgPath": "M 260,300 C 270,260 280,200 290,160", "name": { "de": "Tempelweg", "en": "Temple Path" } },
+      { "id": "wb-forest-trail", "type": "trail", "svgPath": "M 100,320 C 80,370 50,420 20,470", "name": { "de": "Waldpfad", "en": "Forest Trail" } },
+      { "id": "wb-pilgrim-exit", "type": "pilgrim", "svgPath": "M 600,300 C 580,280 560,260 550,240", "name": { "de": "Pilgerpfad (Ausgang)", "en": "Pilgrim Path (Exit)" } }
+    ],
+    "alwin-farm": [
+      { "id": "af-main-track", "type": "main", "svgPath": "M 600,340 C 520,330 440,320 360,310 C 310,305 260,310 200,315", "name": { "de": "Hauptweg", "en": "Main Track" } },
+      { "id": "af-field-path", "type": "trail", "svgPath": "M 280,180 C 270,140 260,100 250,50", "name": { "de": "Feldweg", "en": "Field Path" } },
+      { "id": "af-escape-west", "type": "trail", "svgPath": "M 200,315 C 150,320 100,340 40,370 C 20,380 10,400 0,430", "name": { "de": "Fluchtweg (West)", "en": "Escape Path (West)" } },
+      { "id": "af-pen-path", "type": "trail", "svgPath": "M 400,200 C 420,160 430,120 440,60", "name": { "de": "Weg zum Weideland", "en": "Path to Pastures" } }
+    ],
+    "spiegelteich": [
+      { "id": "st-north", "type": "trail", "svgPath": "M 300,0 C 310,40 320,80 330,120 C 340,160 350,190 340,220", "name": { "de": "Nordpfad (Alte Eiche)", "en": "North Trail (Ancient Oak)" } },
+      { "id": "st-south", "type": "trail", "svgPath": "M 280,340 C 270,380 250,420 220,460 C 210,470 200,478 190,480", "name": { "de": "Südpfad (Rotader Senke)", "en": "South Trail (Red Vein Hollow)" } },
+      { "id": "st-west", "type": "trail", "svgPath": "M 120,260 C 80,250 40,240 0,230", "name": { "de": "Westpfad (Fuchsbau)", "en": "West Trail (Root Hollow)" } },
+      { "id": "st-east", "type": "trail", "svgPath": "M 500,200 C 540,210 570,220 600,230", "name": { "de": "Ostpfad (Waldmeer)", "en": "East Trail (Forest Sea)" } }
+    ]
+  }
+}

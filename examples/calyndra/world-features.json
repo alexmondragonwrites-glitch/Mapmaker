@@ -1,0 +1,143 @@
+{
+  "meta": {
+    "title": "Calyndra — Welt-Features",
+    "description": "Flüsse, Wälder, Berge, Nebel und übernatürliche Elemente",
+    "version": "1.0",
+    "generated": "2026-04-12"
+  },
+  "regions": [
+    {
+      "id": "waldmeer-thalmor",
+      "name": { "de": "Waldmeer von Thalmor", "en": "Forest Sea of Thalmor" },
+      "type": "forest",
+      "description": {
+        "de": "Ein riesiger, uralter Wald, der den Großteil der westlichen Gefilde bedeckt. Dicht, dunkel, und von alten Kräften durchzogen.",
+        "en": "A vast, ancient forest covering most of the western territories. Dense, dark, and permeated by old powers."
+      },
+      "mapLabel": { "x": 310, "y": 95, "fontSize": 14 },
+      "svgPath": "M 148,0 L 548,0 C 558,55 562,110 555,165 C 548,220 562,275 554,330 C 546,385 530,435 518,485 C 506,535 488,580 468,620 C 455,638 445,648 435,650 L 148,650 Z",
+      "gradient": { "type": "radial", "id": "wm-forest", "colors": ["#112209", "#0c1a06", "#080f04"] }
+    },
+    {
+      "id": "thalanor-darkwood",
+      "name": { "de": "Thalanor (Dunkelwald)", "en": "Thalanor (Dark Wood)" },
+      "type": "darkwood",
+      "description": {
+        "de": "Der Dunkelwald — jenseits der Schwelle enden alle Karten. Dichter, dunkler und gefährlicher als das Waldmeer.",
+        "en": "The Dark Wood — beyond the threshold all maps end. Denser, darker, and more dangerous than the forest sea."
+      },
+      "mapLabel": { "x": 82, "y": 95, "fontSize": 9 },
+      "svgPath": "M 0,0 L 152,0 C 158,55 162,110 154,165 C 146,220 160,275 152,330 C 144,385 158,440 150,495 C 144,535 152,580 148,635 L 148,650 L 0,650 Z",
+      "gradient": { "type": "radial", "id": "wm-dark", "colors": ["#050910", "#020306"] }
+    },
+    {
+      "id": "nebelfelder-lyrn",
+      "name": { "de": "Nebelfelder von Lyrn", "en": "Mist Fields of Lyrn" },
+      "type": "plains",
+      "description": {
+        "de": "Weite Nebelfelder östlich des Waldes. Hier hängt der Nebel selbst an klaren Tagen tief über dem Land.",
+        "en": "Wide mist fields east of the forest. Here the mist hangs low over the land even on clear days."
+      },
+      "mapLabel": { "x": 695, "y": 400, "fontSize": 11 },
+      "fogEffect": { "cx": 690, "cy": 385, "rx": 130, "ry": 80 }
+    },
+    {
+      "id": "koenigreich-calyndra",
+      "name": { "de": "Königreich Calyndra", "en": "Kingdom of Calyndra" },
+      "type": "kingdom",
+      "description": {
+        "de": "Das Königreich, zu dem Willow Brook gehört. Die östlichen Lande jenseits der Nebelfelder.",
+        "en": "The kingdom to which Willow Brook belongs. The eastern lands beyond the mist fields."
+      },
+      "mapLabel": { "x": 870, "y": 450, "fontSize": 10 }
+    }
+  ],
+  "rivers": [
+    {
+      "id": "seren",
+      "name": { "de": "Fluss Seren", "en": "River Seren" },
+      "locationId": "willow-brook",
+      "description": {
+        "de": "Der Fluss Seren fließt durch Willow Brook. Eine Brücke und Trittsteine ermöglichen die Überquerung.",
+        "en": "The River Seren flows through Willow Brook. A bridge and stepping stones allow crossing."
+      },
+      "svgPath": "M 0,180 C 80,170 140,200 200,220 C 260,240 320,250 380,230 C 440,210 500,200 600,210",
+      "width": 28,
+      "crossings": [
+        { "type": "bridge", "position": { "x": 300, "y": 232, "w": 40, "h": 12 } },
+        { "type": "ford", "stones": [{ "x": 180, "y": 215 }, { "x": 188, "y": 220 }, { "x": 196, "y": 218 }] }
+      ]
+    }
+  ],
+  "hills": [
+    {
+      "id": "alwin-hills",
+      "name": { "de": "Hügel bei Alwins Gehöft", "en": "Hills near Alwin's Farm" },
+      "description": { "de": "Sanfte Hügel oberhalb der Nebelfelder.", "en": "Gentle hills above the mist fields." },
+      "shapes": [
+        { "cx": 580, "cy": 175, "rx": 80, "ry": 28, "opacity": 0.55 },
+        { "cx": 620, "cy": 190, "rx": 65, "ry": 22, "opacity": 0.45 },
+        { "cx": 555, "cy": 200, "rx": 55, "ry": 18, "opacity": 0.4 }
+      ]
+    }
+  ],
+  "supernaturalElements": [
+    {
+      "id": "gray-imprint", "locationId": "alwin-farm",
+      "name": { "de": "Grauer Abdruck", "en": "Gray Imprint" },
+      "minChapter": 1, "position": { "x": 215, "y": 330 },
+      "description": { "de": "Ein übernatürlicher Abdruck erscheint auf dem Gehöft — Spuren einer fremden Kraft.", "en": "A supernatural imprint appears on the farm — traces of an alien force." }
+    },
+    {
+      "id": "supernatural-eyes", "locationId": "spiegelteich",
+      "name": { "de": "Übernatürliche Augen", "en": "Supernatural Eyes" },
+      "minChapter": 2,
+      "description": { "de": "Das Wasser spiegelt nicht mehr richtig. Etwas beobachtet von unten.", "en": "The water no longer reflects properly. Something watches from below." }
+    },
+    {
+      "id": "oak-vibration", "locationId": "alte-eiche",
+      "name": { "de": "Vibration der Eiche", "en": "Oak Vibration" },
+      "minChapter": 1,
+      "description": { "de": "Ein tiefes Summen durchdringt die Lichtung. Die Rinde schimmert mit feinen Linien.", "en": "A deep humming pervades the clearing. The bark shimmers with fine lines." }
+    },
+    {
+      "id": "red-glow", "locationId": "rotader-senke",
+      "name": { "de": "Rötliches Glimmen", "en": "Red Glow" },
+      "minChapter": 1,
+      "description": { "de": "Ein rötlicher Tümpel glimmt von innen. Kein normales Feuer — es brennt von innen und braucht keine Luft.", "en": "A reddish pool glows from within. Not normal fire — it burns from the inside and needs no air." }
+    },
+    {
+      "id": "veinlight-infection", "locationId": "fuchsbau",
+      "name": { "de": "Aderglut-Infektion", "en": "Veinlight Infection" },
+      "minChapter": 3,
+      "description": { "de": "Rötlicher Staub rieselt von der Wurzeldecke. Die Aderglut des Tals infiziert das Wurzelwerk.", "en": "Reddish dust trickles from the root ceiling. The valley's veinlight infects the root system." }
+    },
+    {
+      "id": "blue-stream-healing", "locationId": "fuchsbau",
+      "name": { "de": "Blauer Strom (Heilung)", "en": "Blue Stream (Healing)" },
+      "minChapter": 3,
+      "description": { "de": "Alina heilt Corin mit dem Blauen Strom. Blassblau-es Licht erfüllt den Raum — es kostet sie ihre Gefühle.", "en": "Alina heals Corin with the Blue Stream. Pale blue light fills the space — it costs her her emotions." }
+    },
+    {
+      "id": "weberinnen", "locationId": "waldsenke",
+      "name": { "de": "Weberinnen (Weavers)", "en": "Weavers" },
+      "minChapter": 6,
+      "description": { "de": "Stränge, dick wie Schnüre, verbinden die Baumkronen. Der Steinboden IST das Netz. Die Weberinnen spüren jede Erschütterung.", "en": "Strands thick as cords connect the treetops. The stone floor IS the web. The Weavers sense every vibration." }
+    },
+    {
+      "id": "stillbrand-cracks", "locationId": "waldsenke",
+      "name": { "de": "Strömungsrisse (Stillbrand)", "en": "Current Cracks (Stillbrand)" },
+      "minChapter": 7,
+      "description": { "de": "Feine Spalten im Boden, aus denen ein schwaches, krankes Rot pulsiert. Darunter ist nichts mehr.", "en": "Fine cracks in the floor from which a faint, sickly red pulses. Below them is nothing." }
+    }
+  ],
+  "destructionEvents": [
+    {
+      "id": "attack-on-willow-brook",
+      "chapter": 6,
+      "affectedLocations": ["willow-brook", "alwin-farm"],
+      "name": { "de": "Angriff auf Willow Brook", "en": "Attack on Willow Brook" },
+      "description": { "de": "Willow Brook und Alwins Gehöft werden beim Angriff zerstört. Das Dorf fällt.", "en": "Willow Brook and Alwin's Farm are destroyed in the attack. The village falls." }
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "title": "Calyndra — Charaktere & Aufenthaltsorte",
+    "description": "NPCs, Farben und Aufenthaltsorte pro Kapitel",
+    "version": "1.0",
+    "generated": "2026-04-12"
+  },
+  "characters": [
+    {
+      "name": "Corin",
+      "role": { "de": "Protagonist", "en": "Protagonist" },
+      "colors": {
+        "hex": "#4a9c7a", "fill": "#2d6a3f", "stroke": "#4ade80",
+        "primary": "#3d8c6a", "accent": "#5ab88c"
+      },
+      "locations": [
+        { "locationId": "willow-brook", "buildingId": "corin-home", "chapters": [1,2,3,4,5] },
+        { "locationId": "willow-brook", "buildingId": "market", "chapters": [6] },
+        { "locationId": "alwin-farm", "buildingId": "farmhouse", "chapters": [1,2] },
+        { "locationId": "spiegelteich", "buildingId": "log-bridge", "chapters": [1,2] },
+        { "locationId": "alte-eiche", "buildingId": "clearing", "chapters": [1,2] },
+        { "locationId": "rotader-senke", "buildingId": "clay-slope", "chapters": [1,2] },
+        { "locationId": "fuchsbau", "buildingId": "moss-bed", "chapters": [3,4] },
+        { "locationId": "nebelruh", "buildingId": "cabin", "chapters": [4,5,6] },
+        { "locationId": "waldsenke", "buildingId": "rim", "chapters": [6,7] }
+      ]
+    },
+    {
+      "name": "Alina",
+      "role": { "de": "Protagonistin", "en": "Protagonist" },
+      "colors": {
+        "hex": "#9c4a7a", "fill": "#1e3a6e", "stroke": "#60a5fa",
+        "primary": "#8b4a9c", "accent": "#b86dc4"
+      },
+      "locations": [
+        { "locationId": "willow-brook", "buildingId": "temple", "chapters": [1,2,3,4,5,6] },
+        { "locationId": "alwin-farm", "buildingId": "farmhouse", "chapters": [1,2] },
+        { "locationId": "alwin-farm", "buildingId": "stone-cross", "chapters": [2] },
+        { "locationId": "spiegelteich", "buildingId": "mossy-stones", "chapters": [1] },
+        { "locationId": "spiegelteich", "buildingId": "log-bridge", "chapters": [2] },
+        { "locationId": "alte-eiche", "buildingId": "oak-trunk", "chapters": [1,2] },
+        { "locationId": "rotader-senke", "buildingId": "clay-slope", "chapters": [1] },
+        { "locationId": "rotader-senke", "buildingId": "hollow", "chapters": [2,5] },
+        { "locationId": "fuchsbau", "buildingId": "healing-spot", "chapters": [3] },
+        { "locationId": "fuchsbau", "buildingId": "main-chamber", "chapters": [4] },
+        { "locationId": "nebelruh", "buildingId": "cabin", "chapters": [4,5,6] },
+        { "locationId": "waldsenke", "buildingId": "rim", "chapters": [6,7] }
+      ]
+    },
+    {
+      "name": "Varo",
+      "role": { "de": "Begleiter / Wächter", "en": "Companion / Guardian" },
+      "colors": {
+        "hex": "#7a4a9c", "fill": "#6b1e1e", "stroke": "#f87171",
+        "primary": "#9c3a3a", "accent": "#c45a5a"
+      },
+      "locations": [
+        { "locationId": "alwin-farm", "buildingId": "gate", "chapters": [1,2] },
+        { "locationId": "spiegelteich", "buildingId": "mossy-stones", "chapters": [1,2] },
+        { "locationId": "alte-eiche", "buildingId": "fern-thicket", "chapters": [1] },
+        { "locationId": "rotader-senke", "buildingId": "moss-carpet", "chapters": [1,2] },
+        { "locationId": "fuchsbau", "buildingId": "entrance", "chapters": [3,4] }
+      ]
+    },
+    {
+      "name": "Sara",
+      "role": { "de": "Verbündete", "en": "Ally" },
+      "colors": {
+        "hex": "#c9a84c", "fill": "#3a2a1e", "stroke": "#fdba74",
+        "primary": "#c9a84c", "accent": "#e8c96d"
+      },
+      "locations": [
+        { "locationId": "nebelruh", "buildingId": "cabin", "chapters": [5,6] },
+        { "locationId": "waldsenke", "buildingId": "rim", "chapters": [6,7] }
+      ]
+    },
+    {
+      "name": "Walter",
+      "role": { "de": "Mentor / Dorfwächter", "en": "Mentor / Village Guard" },
+      "colors": {
+        "hex": "#8a6e2a", "fill": "#4a3728", "stroke": "#c9a84c",
+        "primary": "#8a6e2a", "accent": "#c9a84c"
+      },
+      "locations": [
+        { "locationId": "willow-brook", "buildingId": "guard", "chapters": [1,2,3] },
+        { "locationId": "willow-brook", "buildingId": "market", "chapters": [6] }
+      ]
+    },
+    {
+      "name": "Meira Vale",
+      "role": { "de": "Heilerin / Corins Mutter", "en": "Healer / Corin's Mother" },
+      "colors": {
+        "hex": "#f9a8d4", "fill": "#4a1e3a", "stroke": "#f9a8d4",
+        "primary": "#f9a8d4", "accent": "#fbcfe8"
+      },
+      "locations": [
+        { "locationId": "willow-brook", "buildingId": "herbs", "chapters": [1,2,3,4,5] }
+      ]
+    },
+    {
+      "name": "Eamon",
+      "role": { "de": "Dorfvorsteher / Alinas Vater", "en": "Village Headman / Alina's Father" },
+      "colors": {
+        "hex": "#fbbf24", "fill": "#4a3a1e", "stroke": "#fbbf24",
+        "primary": "#fbbf24", "accent": "#fcd34d"
+      },
+      "locations": [
+        { "locationId": "willow-brook", "buildingId": "eamon", "chapters": [1,2,3,4,5] },
+        { "locationId": "willow-brook", "buildingId": "temple", "chapters": [6] }
+      ]
+    },
+    {
+      "name": "Mitch",
+      "role": { "de": "Nebencharakter", "en": "Supporting Character" },
+      "colors": {
+        "hex": "#a78bfa", "fill": "#3a2d4a", "stroke": "#a78bfa",
+        "primary": "#a78bfa", "accent": "#c4b5fd"
+      },
+      "locations": []
+    },
+    {
+      "name": "Alwin",
+      "role": { "de": "Vermisster Schäfer", "en": "Missing Shepherd" },
+      "colors": {
+        "hex": "#6ee7b7", "fill": "#2d4a3a", "stroke": "#6ee7b7",
+        "primary": "#6ee7b7", "accent": "#a7f3d0"
+      },
+      "locations": []
+    },
+    {
+      "name": "Halwin",
+      "role": { "de": "Nebencharakter", "en": "Supporting Character" },
+      "colors": {
+        "hex": "#67e8f9", "fill": "#1e3a4a", "stroke": "#67e8f9",
+        "primary": "#67e8f9", "accent": "#a5f3fc"
+      },
+      "locations": []
+    },
+    {
+      "name": "Draveen",
+      "role": { "de": "Alchemist", "en": "Alchemist" },
+      "colors": {
+        "hex": "#c084fc", "fill": "#2a1e4a", "stroke": "#c084fc",
+        "primary": "#c084fc", "accent": "#d8b4fe"
+      },
+      "locations": []
+    }
+  ]
+}

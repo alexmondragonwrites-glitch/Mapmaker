@@ -1,0 +1,212 @@
+{
+  "meta": {
+    "title": "Calyndra — Weltorte",
+    "description": "Alle Orte mit Gebäuden und Beschreibungen",
+    "version": "1.0",
+    "generated": "2026-04-12"
+  },
+  "locations": [
+    {
+      "id": "willow-brook",
+      "type": "village",
+      "name": { "de": "Willow Brook", "en": "Willow Brook" },
+      "subtitle": { "de": "Weidenbach", "en": null },
+      "description": {
+        "de": "Das Dorf am alten Pilgerpfad — Corins Heimat und Sitz des Tempels der Lichtströmung. Ruhig, abgelegen, von uralten Wäldern umgeben.",
+        "en": "The village on the old pilgrim's path — Corin's home and seat of the Temple of the Current. Quiet, remote, surrounded by ancient forests."
+      },
+      "coordinates": { "x": 800, "y": 292 },
+      "hasSubMap": true,
+      "destroyedMinChapter": 6,
+      "svgSize": { "w": 600, "h": 500 },
+      "subtitles": [
+        { "minChapter": 6, "key": "places.afterAttack", "color": "#ef4444" },
+        { "minChapter": 0, "key": "places.peacefulVillage", "color": null }
+      ],
+      "buildings": [
+        { "id": "temple", "type": "temple", "position": { "x": 290, "y": 120, "w": 30, "h": 40 }, "label": { "de": "Tempel der Lichtströmung", "en": "Temple of the Light Current" }, "description": { "de": "Das spirituelle Zentrum von Willow Brook. Der Turm ist das höchste Gebäude und von überall im Dorf sichtbar.", "en": "The spiritual center of Willow Brook. The tower is the tallest building, visible from anywhere in the village." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "tower", "type": "tower", "position": { "x": 295, "y": 95, "w": 16, "h": 30 }, "label": { "de": "Tempelturm", "en": "Temple Tower" }, "description": { "de": "Wachtturm und Leuchtfeuer. Von hier aus überblickt man das gesamte Tal.", "en": "Watchtower and beacon. From here one overlooks the entire valley." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "market", "type": "square", "position": { "x": 220, "y": 300, "w": 80, "h": 50 }, "label": { "de": "Marktplatz", "en": "Market Square" }, "description": { "de": "Das Herz des Dorfes. Hier treffen sich die Bewohner, handeln und feiern.", "en": "The heart of the village. Where residents meet, trade, and celebrate." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "bakery", "type": "house", "position": { "x": 320, "y": 295, "w": 22, "h": 18 }, "label": { "de": "Bäckerei", "en": "Bakery" }, "description": { "de": "Die Dorfbäckerei am Rand des Marktplatzes.", "en": "The village bakery at the edge of the market square." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "guard", "type": "guard", "position": { "x": 340, "y": 250, "w": 18, "h": 14 }, "label": { "de": "Wachposten", "en": "Guard Post" }, "description": { "de": "Der Wachposten an der Brücke. Hier wachen die Dorfwächter über den Flussübergang.", "en": "The guard post at the bridge. Village guards watch over the river crossing here." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "corin-home", "type": "house", "position": { "x": 180, "y": 290, "w": 24, "h": 20 }, "label": { "de": "Corins Zuhause", "en": "Corin's Home" }, "description": { "de": "Das bescheidene Heim von Corin und seiner Mutter Meira.", "en": "The humble home of Corin and his mother Meira." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "herbs", "type": "garden", "position": { "x": 155, "y": 300, "w": 18, "h": 14 }, "label": { "de": "Meiras Kräutergarten", "en": "Meira's Herb Garden" }, "description": { "de": "Hier züchtet die Heilerin Meira ihre Kräuter für Tinkturen und Salben.", "en": "Where healer Meira grows her herbs for tinctures and salves." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "house1", "type": "house", "position": { "x": 370, "y": 310, "w": 20, "h": 16 }, "label": { "de": "Wohnhaus", "en": "Dwelling" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "house2", "type": "house", "position": { "x": 400, "y": 290, "w": 22, "h": 18 }, "label": { "de": "Wohnhaus", "en": "Dwelling" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "house3", "type": "house", "position": { "x": 160, "y": 340, "w": 20, "h": 16 }, "label": { "de": "Wohnhaus", "en": "Dwelling" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "house4", "type": "house", "position": { "x": 260, "y": 365, "w": 22, "h": 18 }, "label": { "de": "Wohnhaus", "en": "Dwelling" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "house5", "type": "house", "position": { "x": 330, "y": 360, "w": 18, "h": 16 }, "label": { "de": "Wohnhaus", "en": "Dwelling" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "eamon", "type": "house", "position": { "x": 230, "y": 140, "w": 26, "h": 20 }, "label": { "de": "Eamons Haus (Dorfvorsteher)", "en": "Eamon's House (Headman)" }, "description": { "de": "Das Haus des Dorfvorstehers Eamon Dawn, Vater von Alina.", "en": "The home of village headman Eamon Dawn, Alina's father." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "draveen", "type": "workshop", "position": { "x": 440, "y": 320, "w": 20, "h": 18 }, "label": { "de": "Draveens Werkstatt", "en": "Draveen's Workshop" }, "description": { "de": "Die Werkstatt des Alchemisten Draveen Marrel — vom Dorf geduldet, aber argwöhnisch beobachtet.", "en": "Alchemist Draveen Marrel's workshop — tolerated by the village, but watched with suspicion." }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "alwin-farm",
+      "type": "farm",
+      "name": { "de": "Alwins Gehöft", "en": "Alwin's Farm" },
+      "subtitle": { "de": null, "en": null },
+      "description": { "de": "Hoch über den Nebelfeldern von Lyrn, eine halbe Stunde Fußweg vom alten Pilgerpfad. Alwins abgelegene Schäferei — Ausgangspunkt des Geheimnisses.", "en": "High above the Mist Fields of Lyrn, half an hour's walk from the old pilgrim's path. Alwin's remote sheep farm — the starting point of the mystery." },
+      "coordinates": { "x": 597, "y": 215 },
+      "hasSubMap": true, "destroyedMinChapter": 6,
+      "svgSize": { "w": 600, "h": 480 },
+      "subtitles": [
+        { "minChapter": 5, "key": "places.fateRevealed", "color": "#a08a50" },
+        { "minChapter": 1, "key": "places.abandonedFarm", "color": "#a08a50" },
+        { "minChapter": 0, "key": "places.remoteFarm", "color": null }
+      ],
+      "buildings": [
+        { "id": "farmhouse", "type": "farmhouse", "position": { "x": 260, "y": 180, "w": 50, "h": 35 }, "label": { "de": "Alwins Bauernhaus", "en": "Alwin's Farmhouse" }, "description": { "de": "Das Hauptgebäude des Gehöfts. Innen ordentlich, aber verlassen — Alwins Becher steht noch neben Brot und Käse auf dem Tisch.", "en": "The main building of the homestead. Orderly inside, but abandoned — Alwin's mug still sits beside bread and cheese on the table." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "sheep-pen", "type": "pen", "position": { "x": 370, "y": 200, "w": 60, "h": 40 }, "label": { "de": "Schafspferch", "en": "Sheep Pen" }, "description": { "de": "Massives Eichenholz — von innen heraus zersplittert. Tiefe Hufabdrücke im Schlamm zeugen von blinder Panik.", "en": "Solid oak wood — shattered from the inside. Deep hoof prints in the mud bear witness to blind panic." }, "minChapter": 0, "destroyedChapter": 1 },
+        { "id": "well", "type": "well", "position": { "x": 310, "y": 250, "w": 14, "h": 14 }, "label": { "de": "Steinbrunnen", "en": "Stone Well" }, "description": { "de": "Der Hofbrunnen. Nachts hört man nur sein rhythmisches Tropfen — und den eigenen Herzschlag.", "en": "The courtyard well. At night, one hears only its rhythmic dripping — and one's own heartbeat." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "stone-cross", "type": "shrine", "position": { "x": 290, "y": 290, "w": 10, "h": 16 }, "label": { "de": "Steinkreuz", "en": "Stone Cross" }, "description": { "de": "Ein altes Steinkreuz im Hof. Im Mondlicht schimmert es von innen — dieselbe übernatürliche Energie wie die Alte Eiche.", "en": "An ancient stone cross in the courtyard. In moonlight it glimmers from within — the same supernatural energy as the Ancient Oak." }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "gate", "type": "fence", "position": { "x": 200, "y": 310, "w": 24, "h": 8 }, "label": { "de": "Zerbrochenes Tor", "en": "Broken Gate" }, "description": { "de": "Der Torpfosten knarrt im Wind. Zersplittert, wie nach einem gewaltsamen Durchbruch.", "en": "The gatepost creaks in the wind. Splintered, as if from a violent breach." }, "minChapter": 0, "destroyedChapter": 1 },
+        { "id": "pantry", "type": "storage", "position": { "x": 235, "y": 195, "w": 18, "h": 14 }, "label": { "de": "Vorratskammer", "en": "Pantry" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "barn", "type": "barn", "position": { "x": 400, "y": 160, "w": 30, "h": 24 }, "label": { "de": "Heuscheune", "en": "Hay Barn" }, "minChapter": 0, "destroyedChapter": 6 },
+        { "id": "woodpile", "type": "feature", "position": { "x": 340, "y": 160, "w": 16, "h": 10 }, "label": { "de": "Holzstapel", "en": "Woodpile" }, "minChapter": 0, "destroyedChapter": 6 }
+      ]
+    },
+    {
+      "id": "spiegelteich",
+      "type": "water",
+      "name": { "de": "Spiegelteich", "en": "Mirror Pond" },
+      "subtitle": { "de": "von Thalmor", "en": "of Thalmor" },
+      "description": { "de": "Ein stiller Tümpel tief im Waldmeer. Das Wasser spiegelt den Himmel wie schwarzes Glas — selbst bei bewölktem Himmel.", "en": "A still pond deep in the forest sea. The water mirrors the sky like black glass — even under clouded skies." },
+      "coordinates": { "x": 400, "y": 282 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 480 },
+      "pond": { "cx": 300, "cy": 260, "rx": 120, "ry": 70 },
+      "subtitles": [
+        { "minChapter": 2, "key": "places.pondHaunted", "color": "#8a4a6a" },
+        { "minChapter": 0, "key": "places.pondPeaceful", "color": null }
+      ],
+      "buildings": [
+        { "id": "log-bridge", "type": "bridge", "position": { "x": 230, "y": 240, "w": 80, "h": 6 }, "label": { "de": "Umgestürzter Baumstamm", "en": "Fallen Log Bridge" }, "description": { "de": "Ein glitschiger Baumstamm über dem Teich — der einzige Übergang.", "en": "A slippery tree trunk across the pond — the only crossing." }, "minChapter": 0 },
+        { "id": "beech-east", "type": "tree-landmark", "position": { "x": 440, "y": 180, "w": 16, "h": 20 }, "label": { "de": "Alte Buche", "en": "Ancient Beech" }, "minChapter": 0 },
+        { "id": "webbing", "type": "webbing", "position": { "x": 400, "y": 120, "w": 90, "h": 60 }, "label": { "de": "Unnatürliche Gespinste", "en": "Unnatural Webbing" }, "description": { "de": "Dick wie Schnüre, nass und matt im fahlen Mondlicht. Kein bekanntes Tier spinnt solche Netze.", "en": "Thick as cords, wet and dull in pale moonlight. No known creature spins such webs." }, "minChapter": 1 },
+        { "id": "mossy-stones", "type": "feature", "position": { "x": 120, "y": 280, "w": 24, "h": 16 }, "label": { "de": "Bemooste Steine", "en": "Mossy Stones" }, "minChapter": 0 },
+        { "id": "reeds-south", "type": "feature", "position": { "x": 260, "y": 340, "w": 40, "h": 20 }, "label": { "de": "Schilfgürtel", "en": "Reed Belt" }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "alte-eiche",
+      "type": "landmark",
+      "name": { "de": "Die Alte Eiche", "en": "The Ancient Oak" },
+      "subtitle": { "de": "von Thalmor", "en": "of Thalmor" },
+      "description": { "de": "Eine uralte Eiche auf einer Lichtung im Waldmeer. Ein Ort stiller, alter Kraft — von den Einheimischen gemieden.", "en": "An ancient oak on a clearing in the forest sea. A place of quiet, old power — avoided by the locals." },
+      "coordinates": { "x": 357, "y": 382 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 500 },
+      "subtitles": [
+        { "minChapter": 1, "key": "places.oakVibrating", "color": "#c9a84c" },
+        { "minChapter": 0, "key": "places.oakPeaceful", "color": null }
+      ],
+      "buildings": [
+        { "id": "oak-trunk", "type": "oak-trunk", "position": { "x": 255, "y": 190, "w": 90, "h": 70 }, "label": { "de": "Die Alte Eiche", "en": "The Ancient Oak" }, "description": { "de": "Mehr Festung als Baum. Ein kolossaler, grauer Stamm mit tief zerklüfteter Rinde.", "en": "More fortress than tree. A colossal gray trunk with deeply fissured bark." }, "minChapter": 0 },
+        { "id": "roots-south", "type": "root-system", "position": { "x": 230, "y": 310, "w": 140, "h": 40 }, "label": { "de": "Wurzelstränge", "en": "Root Strands" }, "minChapter": 0 },
+        { "id": "clearing", "type": "clearing", "position": { "x": 160, "y": 280, "w": 60, "h": 35 }, "label": { "de": "Lichtung", "en": "Clearing" }, "minChapter": 0 },
+        { "id": "fern-thicket", "type": "feature", "position": { "x": 400, "y": 350, "w": 50, "h": 30 }, "label": { "de": "Farngestrüpp", "en": "Fern Thicket" }, "minChapter": 0 },
+        { "id": "footprints", "type": "feature", "position": { "x": 310, "y": 260, "w": 20, "h": 12 }, "label": { "de": "Alwins letzte Spuren", "en": "Alwin's Last Tracks" }, "description": { "de": "Hier enden Alwins Fußspuren abrupt. Keine Fortsetzung, kein Kampf — einfach weg.", "en": "Alwin's footprints end abruptly here. No continuation, no struggle — simply gone." }, "minChapter": 1 }
+      ]
+    },
+    {
+      "id": "rotader-senke",
+      "type": "hollow",
+      "name": { "de": "Rotader Senke", "en": "Red Vein Hollow" },
+      "description": { "de": "Eine flache Mulde unterhalb der alten Eiche, wo zwei Wurzelstränge auseinanderlaufen.", "en": "A shallow hollow beneath the old oak, where two root lines diverge." },
+      "coordinates": { "x": 312, "y": 445 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 480 },
+      "subtitles": [
+        { "minChapter": 1, "key": "places.hollowGlowing", "color": "#8a3a2a" },
+        { "minChapter": 0, "key": "places.hollowQuiet", "color": null }
+      ],
+      "buildings": [
+        { "id": "hollow", "type": "hollow-depression", "position": { "x": 200, "y": 200, "w": 200, "h": 120 }, "label": { "de": "Die Senke", "en": "The Hollow" }, "minChapter": 0 },
+        { "id": "root-left", "type": "root-strand", "position": { "x": 100, "y": 160, "w": 120, "h": 14 }, "label": { "de": "Linker Wurzelstrang", "en": "Left Root Strand" }, "minChapter": 0 },
+        { "id": "root-right", "type": "root-strand", "position": { "x": 380, "y": 160, "w": 120, "h": 14 }, "label": { "de": "Rechter Wurzelstrang", "en": "Right Root Strand" }, "minChapter": 0 },
+        { "id": "clay-slope", "type": "feature", "position": { "x": 180, "y": 320, "w": 60, "h": 30 }, "label": { "de": "Lehmhang", "en": "Clay Slope" }, "minChapter": 1 },
+        { "id": "red-pool", "type": "red-pool", "position": { "x": 270, "y": 240, "w": 40, "h": 30 }, "label": { "de": "Rötlicher Tümpel", "en": "Reddish Pool" }, "minChapter": 1 },
+        { "id": "moss-carpet", "type": "feature", "position": { "x": 240, "y": 180, "w": 80, "h": 25 }, "label": { "de": "Moos und Farn", "en": "Moss and Fern" }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "fuchsbau",
+      "type": "shelter",
+      "name": { "de": "Fuchsbau", "en": "Root Hollow" },
+      "subtitle": { "de": "Root Hollow", "en": null },
+      "description": { "de": "Eine natürliche Höhlung unter einer alten Wurzel. Unterschlupf und geheime Wegmarke im Waldmeer von Thalmor.", "en": "A natural hollow beneath an old root. Shelter and secret waypoint in the forest sea of Thalmor." },
+      "coordinates": { "x": 265, "y": 245 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 480 },
+      "subtitles": [
+        { "minChapter": 3, "key": "places.burrowRefuge", "color": "#5a7a9a" },
+        { "minChapter": 0, "key": "places.burrowHidden", "color": null }
+      ],
+      "buildings": [
+        { "id": "entrance", "type": "burrow-entrance", "position": { "x": 340, "y": 140, "w": 40, "h": 25 }, "label": { "de": "Eingang (Umgestürzte Kiefer)", "en": "Entrance (Uprooted Pine)" }, "minChapter": 0 },
+        { "id": "main-chamber", "type": "chamber", "position": { "x": 220, "y": 220, "w": 100, "h": 70 }, "label": { "de": "Hauptkammer", "en": "Main Chamber" }, "minChapter": 0 },
+        { "id": "side-tunnel", "type": "tunnel", "position": { "x": 120, "y": 260, "w": 70, "h": 30 }, "label": { "de": "Seitentunnel", "en": "Side Tunnel" }, "minChapter": 3 },
+        { "id": "root-ceiling", "type": "root-system", "position": { "x": 200, "y": 180, "w": 140, "h": 20 }, "label": { "de": "Wurzelgeflecht (Decke)", "en": "Root Network (Ceiling)" }, "minChapter": 3 },
+        { "id": "healing-spot", "type": "healing", "position": { "x": 250, "y": 250, "w": 40, "h": 30 }, "label": { "de": "Heilungsstelle", "en": "Healing Spot" }, "minChapter": 3 },
+        { "id": "moss-bed", "type": "feature", "position": { "x": 280, "y": 290, "w": 30, "h": 18 }, "label": { "de": "Moosbett", "en": "Moss Bed" }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "nebelruh",
+      "type": "cabin",
+      "name": { "de": "Nebelruh", "en": "Mistrest" },
+      "subtitle": { "de": "Walters Jagdhütte", "en": "Walter's Cabin" },
+      "description": { "de": "Tief im Grenzforst zwischen dem Silberstrom-Pfad und dem Moorbruch. Walters alte Jagdhütte — einer der letzten sicheren Orte.", "en": "Deep in the border forest between the Silverstream Path and the Moor Break. Walter's old hunting cabin — one of the last safe places." },
+      "coordinates": { "x": 190, "y": 350 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 480 },
+      "subtitles": [
+        { "minChapter": 4, "key": "places.cabinRefuge", "color": "#c9844c" },
+        { "minChapter": 0, "key": "places.cabinHidden", "color": null }
+      ],
+      "buildings": [
+        { "id": "cabin", "type": "cabin-main", "position": { "x": 260, "y": 200, "w": 70, "h": 50 }, "label": { "de": "Walters Jagdhütte", "en": "Walter's Hunting Cabin" }, "minChapter": 0 },
+        { "id": "chimney", "type": "chimney", "position": { "x": 300, "y": 188, "w": 8, "h": 12 }, "label": { "de": "Schornstein", "en": "Chimney" }, "minChapter": 0 },
+        { "id": "woodpile", "type": "feature", "position": { "x": 345, "y": 220, "w": 18, "h": 12 }, "label": { "de": "Holzstapel", "en": "Woodpile" }, "minChapter": 0 },
+        { "id": "spring", "type": "well", "position": { "x": 200, "y": 280, "w": 16, "h": 12 }, "label": { "de": "Quelle", "en": "Spring" }, "minChapter": 0 },
+        { "id": "training", "type": "clearing", "position": { "x": 370, "y": 290, "w": 50, "h": 35 }, "label": { "de": "Übungsplatz", "en": "Training Ground" }, "minChapter": 0 },
+        { "id": "hearth", "type": "hearth", "position": { "x": 275, "y": 215, "w": 20, "h": 16 }, "label": { "de": "Feuerstelle", "en": "Hearth" }, "description": { "de": "Am Kamin raucht Corin Walters Pfeife. „Auf Walter."", "en": "At the hearth, Corin smokes Walter's pipe. \"To Walter.\"" }, "minChapter": 5 },
+        { "id": "lookout", "type": "guard", "position": { "x": 160, "y": 150, "w": 14, "h": 18 }, "label": { "de": "Ausguck", "en": "Lookout" }, "minChapter": 0 },
+        { "id": "storage", "type": "storage", "position": { "x": 340, "y": 195, "w": 20, "h": 16 }, "label": { "de": "Vorratslager", "en": "Storage" }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "waldsenke",
+      "type": "hollow",
+      "name": { "de": "Waldsenke", "en": "Kettle Hollow" },
+      "subtitle": { "de": "Kettle Hollow", "en": null },
+      "description": { "de": "Die Kesselsenke — eine tiefe Mulde an den Grenzen des Dunkelwalds. Nebel hängt hier selbst an klaren Tagen.", "en": "The Kettle Hollow — a deep depression at the edges of the Dark Wood. Mist lingers here even on clear days." },
+      "coordinates": { "x": 150, "y": 475 },
+      "hasSubMap": true, "destroyedMinChapter": null,
+      "svgSize": { "w": 600, "h": 500 },
+      "subtitles": [
+        { "minChapter": 7, "key": "places.hollowInfested", "color": "#5a2a2a" },
+        { "minChapter": 6, "key": "places.hollowApproach", "color": "#5a5a6a" },
+        { "minChapter": 0, "key": "places.hollowDark", "color": null }
+      ],
+      "buildings": [
+        { "id": "hollow-floor", "type": "hollow-depression", "position": { "x": 180, "y": 230, "w": 240, "h": 140 }, "label": { "de": "Kesselboden", "en": "Kettle Floor" }, "minChapter": 0 },
+        { "id": "web-canopy", "type": "web-canopy", "position": { "x": 140, "y": 80, "w": 320, "h": 80 }, "label": { "de": "Gespinste in den Kronen", "en": "Webs in the Canopy" }, "minChapter": 0 },
+        { "id": "drained-patch", "type": "drained", "position": { "x": 250, "y": 270, "w": 60, "h": 30 }, "label": { "de": "Ausgelaugter Stein", "en": "Drained Stone" }, "minChapter": 6 },
+        { "id": "vein-cracks", "type": "vein-cracks", "position": { "x": 220, "y": 310, "w": 80, "h": 20 }, "label": { "de": "Strömungsrisse im Stein", "en": "Current Cracks in the Stone" }, "minChapter": 7 },
+        { "id": "fungus-log", "type": "feature", "position": { "x": 350, "y": 320, "w": 50, "h": 10 }, "label": { "de": "Bemooster Stamm", "en": "Mossy Log" }, "minChapter": 0 },
+        { "id": "rim", "type": "feature", "position": { "x": 400, "y": 190, "w": 30, "h": 16 }, "label": { "de": "Senkenrand", "en": "Hollow Rim" }, "minChapter": 0 }
+      ]
+    },
+    {
+      "id": "darkwood",
+      "type": "darkwood",
+      "name": { "de": "Schwelle des Dunkelwalds", "en": "Threshold of the Dark Wood" },
+      "subtitle": { "de": "Thalanor", "en": "Thalanor" },
+      "description": { "de": "Jenseits dieser Schwelle enden die alten Karten. Das Waldmeer von Thalanor — von keinem Kartografen vollständig verzeichnet.", "en": "Beyond this threshold, the old maps end. The forest sea of Thalanor — never fully charted by any cartographer." },
+      "coordinates": { "x": 75, "y": 328 },
+      "hasSubMap": false, "destroyedMinChapter": null,
+      "buildings": []
+    }
+  ]
+}
