@@ -50,6 +50,8 @@ export class StoryMapGenerator {
             showCharacters: true,
             showSupernatural: true,
             showLabels: true,
+            useExploredArea: true,  // Only render terrain in explored area
+            exploredRadius: 1,      // Multiplier for exploration radius
             _viewLevel: 'world',           // 'world' | 'detail'
             _detailLocationId: null as string | null,
         };
@@ -81,6 +83,8 @@ export class StoryMapGenerator {
                     { value: 1248, label: '1248px (HD)' },
                 ],
             },
+            { type: 'checkbox', key: 'useExploredArea', label: 'Nur erforschter Bereich' },
+            { type: 'range', key: 'exploredRadius', label: 'Radius erforscht', min: 0.5, max: 2.5, step: 0.1 },
             { type: 'checkbox', key: 'showPaths', label: 'Wege anzeigen' },
             { type: 'checkbox', key: 'showCharacters', label: 'Charaktere anzeigen' },
             { type: 'checkbox', key: 'showSupernatural', label: 'Übernatürliches anzeigen' },

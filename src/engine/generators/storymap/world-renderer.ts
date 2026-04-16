@@ -40,6 +40,7 @@ import {
     getCharactersAtLocation,
     getSupernaturalAtLocation,
 } from './data-loader';
+import { buildExploredMask } from './explored-area';
 import type { StoryWorldData, StoryLocation, Point } from './types';
 
 // The JSON viewBox dimensions
@@ -64,47 +65,174 @@ export function renderWorldOverview(
     const showCharacters = cfg.showCharacters as boolean;
     const showSupernatural = cfg.showSupernatural as boolean;
     const showLabels = cfg.showLabels as boolean;
+    const useExploredArea = cfg.useExploredArea !== false;
+    const radiusMultiplier = (cfg.exploredRadius as number) ?? 1;
 
-    // 1. Rich procedural terrain base (same as worldmap book style)
-    renderProceduralTerrain(ctx, width, height);
+    // ── 1. Terra Incognita background (everything outside explored area) ──
+    renderTerraIncognita(ctx, width, height);
 
-    // 2. Region tints from story data (forest darkening, etc.)
-    renderRegionOverlays(ctx, data, width, height);
+    // ── 2. Render terrain to an offscreen canvas, then mask it ──
+    const visibleLocations = getVisibleLocations(data, chapter);
 
-    // 3. Fog of war (darken unrevealed areas)
-    renderFogOfWar(ctx, data, chapter, width, height);
+    if (useExploredArea && visibleLocations.length > 0) {
+        // Render full terrain to an offscreen canvas
+        const terrainCanvas = document.createElement('canvas');
+        terrainCanvas.width = width;
+        terrainCanvas.height = height;
+        const terrainCtx = terrainCanvas.getContext('2d')!;
 
-    // 4. Paths/routes (only between visible locations)
+        renderProceduralTerrain(terrainCtx, width, height);
+        renderRegionOverlays(terrainCtx, data, width, height);
+
+        // Build the explored mask and apply it as alpha
+        const mask = buildExploredMask(data, chapter, width, height, radiusMultiplier);
+        terrainCtx.globalCompositeOperation = 'destination-in';
+        terrainCtx.drawImage(mask, 0, 0);
+        terrainCtx.globalCompositeOperation = 'source-over';
+
+        // Composite the masked terrain onto the main canvas
+        ctx.drawImage(terrainCanvas, 0, 0);
+
+        // Decorative inky edge around the explored boundary
+        renderExploredEdge(ctx, mask, width, height);
+    } else {
+        // Fallback: full terrain without masking
+        renderProceduralTerrain(ctx, width, height);
+        renderRegionOverlays(ctx, data, width, height);
+    }
+
+    // ── 3. Paths/routes (only between visible locations) ──
     if (showPaths) {
         renderWorldPaths(ctx, data, chapter, width, height);
     }
 
-    // 5. Location nodes with type-specific icons
-    const visibleLocations = getVisibleLocations(data, chapter);
+    // ── 4. Location nodes with type-specific icons ──
     renderLocationNodes(ctx, data, visibleLocations, chapter, width, height, showLabels);
 
-    // 6. Character markers
+    // ── 5. Character markers ──
     if (showCharacters) {
         renderCharacterMarkers(ctx, data, visibleLocations, chapter, width, height);
     }
 
-    // 7. Supernatural indicators
+    // ── 6. Supernatural indicators ──
     if (showSupernatural) {
         renderSupernaturalIndicators(ctx, data, visibleLocations, chapter, width, height);
     }
 
-    // 8. Border + compass + title
+    // ── 7. Terra Incognita decorations (faded ink in unexplored regions) ──
+    if (useExploredArea && visibleLocations.length > 0) {
+        renderTerraIncognitaLabel(ctx, data, chapter, width, height);
+    }
+
+    // ── 8. Border + compass + title ──
     drawBookBorder(ctx, width, height, { color: '#3a2a18' });
     drawBookCompass(ctx, width - 50, height - 55, 35, {});
     renderTitle(ctx, data, chapter, width);
 
-    // 9. Vignette for atmosphere
-    renderVignette(ctx, width, height, 0.25);
+    // ── 9. Vignette for atmosphere ──
+    renderVignette(ctx, width, height, 0.3);
 
-    // 10. Register clickable areas for zoom-in
+    // ── 10. Register clickable areas for zoom-in ──
     if (zoomController) {
         registerClickableAreas(zoomController, visibleLocations, width, height);
     }
+}
+
+// ── Terra Incognita Background ──────────────────────────────────
+
+function renderTerraIncognita(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+) {
+    // Dark parchment-like base for the unknown areas
+    const gradient = ctx.createRadialGradient(
+        width / 2, height / 2, 0,
+        width / 2, height / 2, Math.max(width, height) * 0.7,
+    );
+    gradient.addColorStop(0, '#1a1208');
+    gradient.addColorStop(0.6, '#0f0a04');
+    gradient.addColorStop(1, '#050302');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle noise grain
+    const noise = new SimplexNoise(999);
+    for (let y = 0; y < height; y += 2) {
+        for (let x = 0; x < width; x += 2) {
+            const n = noise.noise2D(x / 60, y / 60);
+            if (n > 0.3) {
+                ctx.fillStyle = `rgba(60, 40, 20, ${(n - 0.3) * 0.15})`;
+                ctx.fillRect(x, y, 2, 2);
+            }
+        }
+    }
+}
+
+// ── Explored Edge Decoration ────────────────────────────────────
+
+function renderExploredEdge(
+    ctx: CanvasRenderingContext2D,
+    mask: HTMLCanvasElement,
+    width: number,
+    height: number,
+) {
+    // Dark glow around the explored area — makes the edge feel like
+    // the map fades into shadow rather than a hard cut-out
+    const edgeCanvas = document.createElement('canvas');
+    edgeCanvas.width = width;
+    edgeCanvas.height = height;
+    const edgeCtx = edgeCanvas.getContext('2d')!;
+
+    // Draw the mask bigger with a dark stroke → creates a halo
+    edgeCtx.drawImage(mask, 0, 0);
+    const img = edgeCtx.getImageData(0, 0, width, height);
+    const d = img.data;
+
+    // Create an edge mask: pixels where the mask is partially transparent
+    for (let i = 0; i < d.length; i += 4) {
+        const v = d[i];
+        // Band between 20-160 = edge transition
+        if (v > 20 && v < 160) {
+            const t = (v - 20) / 140;
+            d[i] = 40;
+            d[i + 1] = 25;
+            d[i + 2] = 12;
+            d[i + 3] = Math.round(120 * (1 - t));
+        } else {
+            d[i + 3] = 0;
+        }
+    }
+    edgeCtx.putImageData(img, 0, 0);
+
+    ctx.drawImage(edgeCanvas, 0, 0);
+}
+
+// ── Terra Incognita Label ───────────────────────────────────────
+
+function renderTerraIncognitaLabel(
+    ctx: CanvasRenderingContext2D,
+    data: StoryWorldData,
+    chapter: number,
+    width: number,
+    height: number,
+) {
+    // Faded ink text in the dark corners suggesting the unknown
+    const labels = [
+        { x: width * 0.12, y: height * 0.12, text: '· Terra Incognita ·' },
+        { x: width * 0.88, y: height * 0.88, text: '· Unerforschtes Land ·' },
+    ];
+
+    ctx.save();
+    ctx.font = 'italic 14px "Palatino Linotype", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(140, 100, 70, 0.35)';
+
+    for (const lbl of labels) {
+        ctx.fillText(lbl.text, lbl.x, lbl.y);
+    }
+    ctx.restore();
 }
 
 // ── Procedural Terrain ──────────────────────────────────────────
@@ -245,42 +373,6 @@ function renderRegionOverlays(
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.ellipse(p.x, p.y, sRx, sRy, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-// ── Fog of War ──────────────────────────────────────────────────
-
-function renderFogOfWar(
-    ctx: CanvasRenderingContext2D,
-    data: StoryWorldData,
-    chapter: number,
-    width: number,
-    height: number,
-) {
-    const noise = new SimplexNoise(123);
-    const visibleIds = new Set(
-        getVisibleLocations(data, chapter).map(l => l.id),
-    );
-
-    // Darken areas around unrevealed locations
-    for (const loc of data.locations) {
-        if (visibleIds.has(loc.id)) continue;
-
-        const p = scaleCoord(
-            loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
-        );
-
-        const radius = 80 + noise.noise2D(p.x / 100, p.y / 100) * 30;
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
-        gradient.addColorStop(0, 'rgba(20, 16, 12, 0.85)');
-        gradient.addColorStop(0.5, 'rgba(20, 16, 12, 0.5)');
-        gradient.addColorStop(1, 'rgba(20, 16, 12, 0)');
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.fill();
     }
 }
