@@ -39,15 +39,40 @@ import {
     isLocationDestroyed,
     getCharactersAtLocation,
     getSupernaturalAtLocation,
+    computeWorldBounds,
 } from './data-loader';
 import { buildExploredMask } from './explored-area';
 import type { StoryWorldData, StoryLocation, Point } from './types';
 
-// The JSON viewBox dimensions
-const VIEW_W = 1000;
-const VIEW_H = 650;
 // Fixed seed for reproducible story world terrain
 const WORLD_SEED = 42;
+
+/** The world viewport — computed dynamically from location data. */
+interface ViewRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** Map a world coordinate to a canvas pixel using the current viewport. */
+function worldToCanvas(
+    wx: number, wy: number,
+    view: ViewRect, canvasW: number, canvasH: number,
+): Point {
+    return {
+        x: ((wx - view.x) / view.w) * canvasW,
+        y: ((wy - view.y) / view.h) * canvasH,
+    };
+}
+
+/** Scale a set of world-coord points to canvas pixels. */
+function worldPointsToCanvas(
+    points: readonly Point[],
+    view: ViewRect, canvasW: number, canvasH: number,
+): Point[] {
+    return points.map(p => worldToCanvas(p.x, p.y, view, canvasW, canvasH));
+}
 
 /**
  * Render the world overview map on the canvas.
@@ -68,58 +93,57 @@ export function renderWorldOverview(
     const useExploredArea = cfg.useExploredArea !== false;
     const radiusMultiplier = (cfg.exploredRadius as number) ?? 1;
 
-    // ── 1. Terra Incognita background (everything outside explored area) ──
+    // Compute dynamic viewport from ALL location positions.
+    // This is the key to "the map grows with your story": adding a
+    // location far away auto-extends the bounds.
+    const view = computeWorldBounds(data);
+
+    // ── 1. Terra Incognita background ──
     renderTerraIncognita(ctx, width, height);
 
-    // ── 2. Render terrain to an offscreen canvas, then mask it ──
+    // ── 2. Terrain + explored-area mask ──
     const visibleLocations = getVisibleLocations(data, chapter);
 
     if (useExploredArea && visibleLocations.length > 0) {
-        // Render full terrain to an offscreen canvas
         const terrainCanvas = document.createElement('canvas');
         terrainCanvas.width = width;
         terrainCanvas.height = height;
         const terrainCtx = terrainCanvas.getContext('2d')!;
 
         renderProceduralTerrain(terrainCtx, width, height);
-        renderRegionOverlays(terrainCtx, data, width, height);
+        renderRegionOverlays(terrainCtx, data, view, width, height);
 
-        // Build the explored mask and apply it as alpha
-        const mask = buildExploredMask(data, chapter, width, height, radiusMultiplier);
+        const mask = buildExploredMask(data, chapter, view, width, height, radiusMultiplier);
         terrainCtx.globalCompositeOperation = 'destination-in';
         terrainCtx.drawImage(mask, 0, 0);
         terrainCtx.globalCompositeOperation = 'source-over';
 
-        // Composite the masked terrain onto the main canvas
         ctx.drawImage(terrainCanvas, 0, 0);
-
-        // Decorative inky edge around the explored boundary
         renderExploredEdge(ctx, mask, width, height);
     } else {
-        // Fallback: full terrain without masking
         renderProceduralTerrain(ctx, width, height);
-        renderRegionOverlays(ctx, data, width, height);
+        renderRegionOverlays(ctx, data, view, width, height);
     }
 
-    // ── 3. Paths/routes (only between visible locations) ──
+    // ── 3. Paths ──
     if (showPaths) {
-        renderWorldPaths(ctx, data, chapter, width, height);
+        renderWorldPaths(ctx, data, chapter, view, width, height);
     }
 
-    // ── 4. Location nodes with type-specific icons ──
-    renderLocationNodes(ctx, data, visibleLocations, chapter, width, height, showLabels);
+    // ── 4. Location nodes ──
+    renderLocationNodes(ctx, data, visibleLocations, chapter, view, width, height, showLabels);
 
     // ── 5. Character markers ──
     if (showCharacters) {
-        renderCharacterMarkers(ctx, data, visibleLocations, chapter, width, height);
+        renderCharacterMarkers(ctx, data, visibleLocations, chapter, view, width, height);
     }
 
     // ── 6. Supernatural indicators ──
     if (showSupernatural) {
-        renderSupernaturalIndicators(ctx, data, visibleLocations, chapter, width, height);
+        renderSupernaturalIndicators(ctx, data, visibleLocations, chapter, view, width, height);
     }
 
-    // ── 7. Terra Incognita decorations (faded ink in unexplored regions) ──
+    // ── 7. Terra Incognita labels ──
     if (useExploredArea && visibleLocations.length > 0) {
         renderTerraIncognitaLabel(ctx, data, chapter, width, height);
     }
@@ -129,12 +153,12 @@ export function renderWorldOverview(
     drawBookCompass(ctx, width - 50, height - 55, 35, {});
     renderTitle(ctx, data, chapter, width);
 
-    // ── 9. Vignette for atmosphere ──
+    // ── 9. Vignette ──
     renderVignette(ctx, width, height, 0.3);
 
-    // ── 10. Register clickable areas for zoom-in ──
+    // ── 10. Clickable areas ──
     if (zoomController) {
-        registerClickableAreas(zoomController, visibleLocations, width, height);
+        registerClickableAreas(zoomController, visibleLocations, view, width, height);
     }
 }
 
@@ -344,6 +368,7 @@ function renderProceduralTerrain(
 function renderRegionOverlays(
     ctx: CanvasRenderingContext2D,
     data: StoryWorldData,
+    view: ViewRect,
     width: number,
     height: number,
 ) {
@@ -359,7 +384,7 @@ function renderRegionOverlays(
         if (!region.svgPath) continue;
 
         const points = parseSVGPath(region.svgPath);
-        const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
+        const scaled = worldPointsToCanvas(points, view, width, height);
 
         switch (region.type) {
             case 'darkwood': {
@@ -410,9 +435,9 @@ function renderRegionOverlays(
     for (const region of data.featureRegions) {
         if (!region.fogEffect) continue;
         const { cx, cy, rx, ry } = region.fogEffect;
-        const p = scaleCoord(cx, cy, VIEW_W, VIEW_H, width, height);
-        const sRx = (rx / VIEW_W) * width;
-        const sRy = (ry / VIEW_H) * height;
+        const p = worldToCanvas(cx, cy, view, width, height);
+        const sRx = (rx / view.w) * width;
+        const sRy = (ry / view.h) * height;
 
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(sRx, sRy));
         gradient.addColorStop(0, 'rgba(200, 210, 220, 0.18)');
@@ -428,9 +453,9 @@ function renderRegionOverlays(
     // Hills in the pastureland — gentle elevation bumps
     for (const hill of data.hills) {
         for (const shape of hill.shapes) {
-            const p = scaleCoord(shape.cx, shape.cy, VIEW_W, VIEW_H, width, height);
-            const rx = (shape.rx / VIEW_W) * width;
-            const ry = (shape.ry / VIEW_H) * height;
+            const p = worldToCanvas(shape.cx, shape.cy, view, width, height);
+            const rx = (shape.rx / view.w) * width;
+            const ry = (shape.ry / view.h) * height;
 
             const grad = ctx.createRadialGradient(p.x, p.y - ry * 0.3, 0, p.x, p.y, Math.max(rx, ry));
             grad.addColorStop(0, `rgba(180, 160, 100, ${shape.opacity * 0.15})`);
@@ -449,6 +474,7 @@ function renderWorldPaths(
     ctx: CanvasRenderingContext2D,
     data: StoryWorldData,
     chapter: number,
+    view: ViewRect,
     width: number,
     height: number,
 ) {
@@ -460,7 +486,7 @@ function renderWorldPaths(
         if (!visibleIds.has(path.from) || !visibleIds.has(path.to)) continue;
 
         const points = parseSVGPath(path.svgPath);
-        const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
+        const scaled = worldPointsToCanvas(points, view, width, height);
         if (scaled.length === 0) continue;
 
         ctx.save();
@@ -487,14 +513,15 @@ function renderLocationNodes(
     data: StoryWorldData,
     visibleLocations: StoryLocation[],
     chapter: number,
+    view: ViewRect,
     width: number,
     height: number,
     showLabels: boolean,
 ) {
     for (const loc of visibleLocations) {
-        const p = scaleCoord(
+        const p = worldToCanvas(
             loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
+            view, width, height,
         );
         const destroyed = isLocationDestroyed(loc, chapter);
 
@@ -645,6 +672,7 @@ function renderCharacterMarkers(
     data: StoryWorldData,
     visibleLocations: StoryLocation[],
     chapter: number,
+    view: ViewRect,
     width: number,
     height: number,
 ) {
@@ -652,9 +680,9 @@ function renderCharacterMarkers(
         const chars = getCharactersAtLocation(data, loc.id, chapter);
         if (chars.length === 0) continue;
 
-        const base = scaleCoord(
+        const base = worldToCanvas(
             loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
+            view, width, height,
         );
 
         const spread = 14;
@@ -683,6 +711,7 @@ function renderSupernaturalIndicators(
     data: StoryWorldData,
     visibleLocations: StoryLocation[],
     chapter: number,
+    view: ViewRect,
     width: number,
     height: number,
 ) {
@@ -690,9 +719,9 @@ function renderSupernaturalIndicators(
         const effects = getSupernaturalAtLocation(data, loc.id, chapter);
         if (effects.length === 0) continue;
 
-        const p = scaleCoord(
+        const p = worldToCanvas(
             loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
+            view, width, height,
         );
 
         const pulseRadius = 25 + effects.length * 5;
@@ -755,6 +784,7 @@ function renderTitle(
 function registerClickableAreas(
     zoomController: any,
     visibleLocations: StoryLocation[],
+    view: ViewRect,
     width: number,
     height: number,
 ) {
@@ -763,9 +793,9 @@ function registerClickableAreas(
     for (const loc of visibleLocations) {
         if (!loc.hasSubMap) continue;
 
-        const p = scaleCoord(
+        const p = worldToCanvas(
             loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
+            view, width, height,
         );
 
         const clickRadius = loc.type === 'village' ? 22 : 16;

@@ -78,6 +78,49 @@ export function loadWorldData(): StoryWorldData {
     };
 }
 
+// ── World bounds ────────────────────────────────────────────────
+
+/**
+ * Compute the bounding rectangle of ALL locations in world coords.
+ * Adds padding so there's room to breathe at the edges and so
+ * future locations can be added slightly beyond the current extent
+ * without a jarring viewport jump.
+ *
+ * Returns { x, y, w, h } in the original world coordinate space
+ * (not pixels).
+ */
+export function computeWorldBounds(
+    data: StoryWorldData,
+    padding = 0.25,
+): { x: number; y: number; w: number; h: number } {
+    if (data.locations.length === 0) {
+        return { x: 0, y: 0, w: 1000, h: 650 };
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const loc of data.locations) {
+        minX = Math.min(minX, loc.coordinates.x);
+        minY = Math.min(minY, loc.coordinates.y);
+        maxX = Math.max(maxX, loc.coordinates.x);
+        maxY = Math.max(maxY, loc.coordinates.y);
+    }
+
+    const w = maxX - minX;
+    const h = maxY - minY;
+    const pad = Math.max(w, h) * padding;
+
+    return {
+        x: minX - pad,
+        y: minY - pad,
+        w: w + pad * 2,
+        h: h + pad * 2,
+    };
+}
+
 // ── Query helpers ───────────────────────────────────────────────
 
 /** Locations visible at the given chapter (at least one building revealed). */

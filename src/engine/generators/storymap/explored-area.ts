@@ -15,12 +15,35 @@
  */
 
 import { SimplexNoise } from '../../noise';
-import { parseSVGPath, scalePoints, scaleCoord, drawPointPath } from './svg-path';
+import { parseSVGPath, scaleCoord, drawPointPath } from './svg-path';
 import { getVisibleLocations } from './data-loader';
 import type { StoryWorldData, StoryLocation, Point } from './types';
 
-const VIEW_W = 1000;
-const VIEW_H = 650;
+/** Dynamic viewport rect — passed through from the world renderer. */
+interface ViewRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** Map a world coordinate to canvas pixel via the viewport. */
+function viewToCanvas(
+    wx: number, wy: number,
+    view: ViewRect, canvasW: number, canvasH: number,
+): Point {
+    return {
+        x: ((wx - view.x) / view.w) * canvasW,
+        y: ((wy - view.y) / view.h) * canvasH,
+    };
+}
+
+/** Scale a set of world-coord points to canvas pixels. */
+function viewPointsToCanvas(
+    points: readonly Point[], view: ViewRect, canvasW: number, canvasH: number,
+): Point[] {
+    return points.map(p => viewToCanvas(p.x, p.y, view, canvasW, canvasH));
+}
 
 /** Exploration radius around each location type, in view coords. */
 const EXPLORATION_RADIUS: Record<string, number> = {
@@ -47,6 +70,7 @@ const PATH_CORRIDOR = 35;
 export function buildExploredMask(
     data: StoryWorldData,
     chapter: number,
+    view: ViewRect,
     width: number,
     height: number,
     radiusMultiplier = 1,
@@ -56,11 +80,9 @@ export function buildExploredMask(
     mask.height = height;
     const ctx = mask.getContext('2d')!;
 
-    // Start fully black (unexplored)
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, width, height);
 
-    // Switch to "lighter" composite so explored regions accumulate
     ctx.globalCompositeOperation = 'lighter';
 
     const visibleLocations = getVisibleLocations(data, chapter);
@@ -68,13 +90,13 @@ export function buildExploredMask(
 
     // 1. Paint location circles
     for (const loc of visibleLocations) {
-        const p = scaleCoord(
+        const p = viewToCanvas(
             loc.coordinates.x, loc.coordinates.y,
-            VIEW_W, VIEW_H, width, height,
+            view, width, height,
         );
         const baseRadius = EXPLORATION_RADIUS[loc.type] ?? 60;
         const viewRadius = baseRadius * radiusMultiplier;
-        const pxRadius = (viewRadius / VIEW_W) * width;
+        const pxRadius = (viewRadius / view.w) * width;
 
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, pxRadius);
         grad.addColorStop(0, '#ffffff');
@@ -87,12 +109,12 @@ export function buildExploredMask(
     }
 
     // 2. Paint path corridors between visible locations
-    const corridorPx = (PATH_CORRIDOR / VIEW_W) * width * radiusMultiplier;
+    const corridorPx = (PATH_CORRIDOR / view.w) * width * radiusMultiplier;
     for (const path of data.worldPaths) {
         if (!visibleIds.has(path.from) || !visibleIds.has(path.to)) continue;
 
         const points = parseSVGPath(path.svgPath);
-        const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
+        const scaled = viewPointsToCanvas(points, view, width, height);
         if (scaled.length < 2) continue;
 
         // Draw a wide soft stroke along the path
