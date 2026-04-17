@@ -46,6 +46,9 @@ interface SidebarProps {
   onSelectLore: () => void;
   onSelectAssets: () => void;
   onSelectPlace: () => void;
+  onSelectAdmin: () => void;
+  // Admin editor
+  adminPanel?: React.ReactNode;
   onUpdateConfig: (key: string, value: unknown) => void;
   onGenerate: () => void;
   onRandomize: () => void;
@@ -57,6 +60,7 @@ const HEADERS: Record<ActivePanel, string> = {
   lore: 'Lore-Verwaltung',
   assets: 'Asset-Packs',
   place: 'Platzieren & Speichern',
+  admin: 'Story-Editor',
 };
 
 export function Sidebar(props: SidebarProps) {
@@ -75,6 +79,7 @@ export function Sidebar(props: SidebarProps) {
         onSelectLore={props.onSelectLore}
         onSelectAssets={props.onSelectAssets}
         onSelectPlace={props.onSelectPlace}
+        onSelectAdmin={props.onSelectAdmin}
       />
 
       <div className="controls-header">{HEADERS[props.activePanel]}</div>
@@ -128,6 +133,7 @@ export function Sidebar(props: SidebarProps) {
             onLoadMap={props.onLoadMap}
           />
         )}
+        {props.activePanel === 'admin' && props.adminPanel}
       </div>
 
       <ActionBar

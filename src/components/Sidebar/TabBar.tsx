@@ -1,6 +1,6 @@
 import type { GeneratorEntry } from '../../engine/types';
 
-export type ActivePanel = 'generator' | 'lore' | 'assets' | 'place';
+export type ActivePanel = 'generator' | 'lore' | 'assets' | 'place' | 'admin';
 
 interface TabBarProps {
   generators: GeneratorEntry[];
@@ -10,6 +10,7 @@ interface TabBarProps {
   onSelectLore: () => void;
   onSelectAssets: () => void;
   onSelectPlace: () => void;
+  onSelectAdmin: () => void;
 }
 
 // Short labels so all tabs fit in a 320px sidebar without wrapping weirdly
@@ -27,6 +28,7 @@ export function TabBar({
   onSelectLore,
   onSelectAssets,
   onSelectPlace,
+  onSelectAdmin,
 }: TabBarProps) {
   return (
     <nav className="tab-bar">
@@ -69,6 +71,14 @@ export function TabBar({
         >
           <span className="tab-icon">🎯</span>
           <span className="tab-label">Platzieren</span>
+        </button>
+        <button
+          className={`tab-btn ${activePanel === 'admin' ? 'active' : ''}`}
+          onClick={onSelectAdmin}
+          title="Story-Editor (Admin)"
+        >
+          <span className="tab-icon">🔧</span>
+          <span className="tab-label">Editor</span>
         </button>
       </div>
     </nav>

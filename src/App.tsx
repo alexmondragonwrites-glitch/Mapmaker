@@ -13,6 +13,8 @@ import { setStoryMapData, setStoryMapZoom } from './engine/generators/storymap/s
 import { loadWorldData } from './engine/generators/storymap/data-loader';
 import { renderPlacedAssets } from './engine/placed-assets';
 import { exportCanvasAsPNG } from './utils';
+import { useStoryEditor } from './hooks/useStoryEditor';
+import { AdminPanel } from './components/Sidebar/AdminPanel';
 import type { ActivePanel } from './components/Sidebar/TabBar';
 import type { PlaceMode } from './components/Sidebar/PlacementPanel';
 
@@ -62,6 +64,11 @@ export default function App() {
   } = useAssets();
 
   const zoom = useZoom();
+
+  const storyEditor = useStoryEditor();
+
+  // Track pending click-to-place coordinates for the admin editor
+  const [adminPendingCoords, setAdminPendingCoords] = useState<{ x: number; y: number } | null>(null);
 
   const [activePanel, setActivePanel] = useState<ActivePanel>('generator');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -517,6 +524,27 @@ export default function App() {
         onSaveMap={handleSaveMap}
         onLoadMap={handleLoadMap}
         onSelectPlace={() => setActivePanel('place')}
+        onSelectAdmin={() => setActivePanel('admin')}
+        adminPanel={
+          <AdminPanel
+            isAuthenticated={storyEditor.isAuthenticated}
+            hasPassword={storyEditor.hasPassword}
+            onSetPassword={storyEditor.setPassword}
+            onLogin={storyEditor.login}
+            onLogout={storyEditor.logout}
+            worldData={storyEditor.worldData}
+            onAddLocation={storyEditor.addLocation}
+            onUpdateLocation={storyEditor.updateLocation}
+            onDeleteLocation={storyEditor.deleteLocation}
+            onAddPath={storyEditor.addPath}
+            onDeletePath={storyEditor.deletePath}
+            onExport={storyEditor.exportData}
+            onImport={storyEditor.importData}
+            onReset={storyEditor.resetToDefaults}
+            dirty={storyEditor.dirty}
+            pendingCoords={adminPendingCoords}
+          />
+        }
       />
 
       <main className="main-content">
