@@ -15,15 +15,11 @@ import {
     generateAdvancedHeightMap,
     generateTemperatureMap,
     generateAdvancedMoistureMap,
-    generateRiverSystems,
     findMountainRidges,
 } from '../../terrain';
 import {
     renderParchmentTexture,
     renderHillshading,
-    renderWaterWaves,
-    renderHandDrawnCoastline,
-    renderPaintedForests,
     renderVignette,
     drawBookCompass,
     drawBookBorder,
@@ -31,7 +27,6 @@ import {
 import { renderBookTerrainOverlay } from '../worldmap/styles';
 import { renderBookNaturalForests } from '../worldmap/features/forests';
 import { renderBookMountainRidges } from '../worldmap/features/mountains';
-import { renderRiverSystems } from '../worldmap/features/rivers';
 import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
 import { parseSVGPath, scalePoints, scaleCoord, drawPointPath } from './svg-path';
 import {
@@ -291,11 +286,11 @@ function renderProceduralTerrain(
         height,
         scale: 8,
         continentShape: 'pangaea',
-        seaLevel: 0.12,
+        seaLevel: 0.0,
         mountainLevel: 0.88,
         mapStyle: 'book',
         forestDensity: 0.85,
-        riverCount: 2,
+        riverCount: 0,
     };
 
     // Generate terrain data
@@ -317,46 +312,22 @@ function renderProceduralTerrain(
     // Parchment base texture
     renderParchmentTexture(ctx, width, height, WORLD_SEED);
 
-    // Book-style terrain overlay (land colors, sea, biomes)
+    // Book-style terrain overlay (land colors, biomes — no sea with seaLevel 0)
     renderBookTerrainOverlay(ctx, terrainCfg, heightMap, moistureMap);
 
-    // Hillshading for depth
+    // Hillshading for gentle rolling-hills depth
     renderHillshading(ctx, width, height, heightMap, {
-        strength: 0.35,
-        ambient: 0.35,
+        strength: 0.25,
+        ambient: 0.45,
     });
 
-    // Water wave pattern
-    renderWaterWaves(ctx, width, height, heightMap, terrainCfg.seaLevel, {
-        waveSpacing: 6,
-        waveColor: 'rgba(40, 60, 100, 0.25)',
-    });
-
-    // River systems
-    const riverSystems = generateRiverSystems(
-        width, height, heightMap, terrainCfg.seaLevel,
-        terrainCfg.mountainLevel, rng, terrainCfg.riverCount,
-    );
-    renderRiverSystems(ctx, terrainCfg, riverSystems);
-
-    // Hand-drawn coastline
-    renderHandDrawnCoastline(ctx, width, height, heightMap, terrainCfg.seaLevel, {
-        hachureLines: true,
-        hachureLength: 8,
-        hachureDensity: 0.12,
-    });
-
-    // Painted forests (mass fills)
-    renderPaintedForests(
-        ctx, width, height, heightMap, moistureMap, temperatureMap,
-        terrainCfg.seaLevel, terrainCfg.mountainLevel,
-        terrainCfg.forestDensity, WORLD_SEED,
-    );
-
-    // Individual trees at forest edges
+    // Individual trees scattered across the terrain — these look
+    // natural and hand-drawn. We skip renderPaintedForests entirely
+    // because it creates thick green blob masses that look ugly at
+    // regional scale. Individual trees > mass fills.
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
-    // Mountain ridges
+    // Gentle mountain ridges (only the tallest hills get peaks)
     const ridgePoints = findMountainRidges(
         width, height, heightMap, terrainCfg.mountainLevel, rng,
     );
