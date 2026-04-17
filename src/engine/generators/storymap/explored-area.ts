@@ -139,9 +139,6 @@ export function buildExploredMask(
 
     ctx.globalCompositeOperation = 'source-over';
 
-    // 3. Noise-based edge dithering — break the perfect circles
-    applyNoiseEdge(ctx, width, height);
-
     return mask;
 }
 
