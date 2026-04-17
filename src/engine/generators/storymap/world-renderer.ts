@@ -28,7 +28,6 @@ import { renderBookTerrainOverlay } from '../worldmap/styles';
 import { renderBookNaturalForests } from '../worldmap/features/forests';
 import { renderBookMountainRidges } from '../worldmap/features/mountains';
 import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
-import { parseSVGPath, scalePoints, scaleCoord, drawPointPath } from './svg-path';
 import {
     getVisibleLocations,
     isLocationDestroyed,
@@ -306,10 +305,29 @@ function renderProceduralTerrain(
         width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
     );
 
+    // Bias moisture: west = dense forest, east = open farmland.
+    // The story geography has Thalanor/Waldmeer (ancient forest)
+    // on the left and Calyndra (cultivated kingdom) on the right.
+    // Spiegelteich (x ~400 in view coords, ~40% of width) is the
+    // approximate forest-farmland transition.
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            const t = x / width; // 0 = far west, 1 = far east
+            // West: boost moisture to 0.8+ (dense forest)
+            // East: reduce moisture to 0.2- (open fields)
+            const forestBias = 1.0 - t; // 1.0 in west, 0.0 in east
+            const biased = moistureMap[idx] * 0.3 + forestBias * 0.7;
+            moistureMap[idx] = biased;
+        }
+    }
+
     // Parchment base texture
     renderParchmentTexture(ctx, width, height, WORLD_SEED);
 
-    // Book-style terrain overlay (land colors, biomes — no sea with seaLevel 0)
+    // Book-style terrain overlay (biome colors reflect the biased
+    // moisture: green-brown forest tones in west, warm golden
+    // farmland tones in east)
     renderBookTerrainOverlay(ctx, terrainCfg, heightMap, moistureMap);
 
     // Hillshading for gentle rolling-hills depth
@@ -318,10 +336,9 @@ function renderProceduralTerrain(
         ambient: 0.45,
     });
 
-    // Individual trees scattered across the terrain — these look
-    // natural and hand-drawn. We skip renderPaintedForests entirely
-    // because it creates thick green blob masses that look ugly at
-    // regional scale. Individual trees > mass fills.
+    // Individual trees — density follows the biased moisture map,
+    // so the west gets dense tree coverage (forest) and the east
+    // stays open (farmland with scattered trees).
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
     // Gentle mountain ridges (only the tallest hills get peaks)
@@ -331,90 +348,8 @@ function renderProceduralTerrain(
     renderBookMountainRidges(ctx, terrainCfg, ridgePoints, rng);
 }
 
-// ── Region Overlays ─────────────────────────────────────────────
-
-function renderRegionOverlays(
-    ctx: CanvasRenderingContext2D,
-    data: StoryWorldData,
-    view: ViewRect,
-    width: number,
-    height: number,
-) {
-    // Tint story-specific regions on top of procedural terrain.
-    // The Calyndra borderlands have distinct zones:
-    //   - Thalanor (far west): near-black ancient dark forest
-    //   - Waldmeer (west-central): dense old-growth forest, dark green
-    //   - Nebelfelder (east): misty open plains
-    //   - Weideland (north-east): golden pasturelands
-    //   - Kingdom proper (far east): cultivated, open
-
-    for (const region of data.featureRegions) {
-        if (!region.svgPath) continue;
-
-        const points = parseSVGPath(region.svgPath);
-        const scaled = worldPointsToCanvas(points, view, width, height);
-
-        switch (region.type) {
-            case 'darkwood': {
-                // Thalanor: impenetrable ancient forest — solid dark
-                ctx.save();
-                drawPointPath(ctx, scaled, true);
-                ctx.fillStyle = '#060a03';
-                ctx.fill();
-                ctx.restore();
-                break;
-            }
-            case 'forest': {
-                // Waldmeer: subtle darkening over the procedural terrain.
-                // The terrain already generates forest — we just deepen it.
-                ctx.save();
-                drawPointPath(ctx, scaled, true);
-                ctx.fillStyle = 'rgba(8, 18, 4, 0.3)';
-                ctx.fill();
-                ctx.restore();
-                break;
-            }
-            default:
-                continue;
-        }
-    }
-
-    // Fog/mist effect for the Nebelfelder region
-    for (const region of data.featureRegions) {
-        if (!region.fogEffect) continue;
-        const { cx, cy, rx, ry } = region.fogEffect;
-        const p = worldToCanvas(cx, cy, view, width, height);
-        const sRx = (rx / view.w) * width;
-        const sRy = (ry / view.h) * height;
-
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(sRx, sRy));
-        gradient.addColorStop(0, 'rgba(200, 210, 220, 0.18)');
-        gradient.addColorStop(0.5, 'rgba(170, 180, 190, 0.10)');
-        gradient.addColorStop(1, 'rgba(140, 150, 160, 0)');
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y, sRx, sRy, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    // Hills in the pastureland — gentle elevation bumps
-    for (const hill of data.hills) {
-        for (const shape of hill.shapes) {
-            const p = worldToCanvas(shape.cx, shape.cy, view, width, height);
-            const rx = (shape.rx / view.w) * width;
-            const ry = (shape.ry / view.h) * height;
-
-            const grad = ctx.createRadialGradient(p.x, p.y - ry * 0.3, 0, p.x, p.y, Math.max(rx, ry));
-            grad.addColorStop(0, `rgba(180, 160, 100, ${shape.opacity * 0.15})`);
-            grad.addColorStop(1, 'rgba(120, 110, 70, 0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-}
+// ── (Region Overlays removed — terrain biome gradient handles
+//     forest/farmland transition directly via moisture bias) ──
 
 // ── World Paths ─────────────────────────────────────────────────
 
