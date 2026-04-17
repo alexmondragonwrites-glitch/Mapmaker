@@ -244,18 +244,34 @@ function renderProceduralTerrain(
 ) {
     const rng = new SeededRandom(WORLD_SEED);
 
-    // Terrain config matching the worldmap defaults
+    // Regional-scale terrain config: the story plays in the western
+    // borderlands of Calyndra — a few villages, forest edges, and
+    // rolling hills. NOT a continent with oceans and mountain ranges.
+    //
+    // Key differences from the worldmap defaults:
+    //   - seaLevel very low: almost no water bodies (just the River
+    //     Seren and a few ponds — those come from story data, not
+    //     the height map)
+    //   - continentShape 'pangaea': produces contiguous land instead
+    //     of islands/continents with oceans between them
+    //   - scale 8: smaller terrain features (hills, not mountain
+    //     ranges) — feels like a regional survey, not a world atlas
+    //   - mountainLevel high: very few peaks — this area is hilly
+    //     woodland, the Ice Ridges are far to the north
+    //   - forestDensity high: the western borderlands are dense
+    //     forest (Thalanor to the west, Waldmeer to the south)
+    //   - riverCount low: just a couple of streams
     const terrainCfg = {
         seed: WORLD_SEED,
         width,
         height,
-        scale: 3.5,
-        continentShape: 'archipelago',
-        seaLevel: 0.42,
-        mountainLevel: 0.72,
+        scale: 8,
+        continentShape: 'pangaea',
+        seaLevel: 0.12,
+        mountainLevel: 0.88,
         mapStyle: 'book',
-        forestDensity: 0.6,
-        riverCount: 4,
+        forestDensity: 0.85,
+        riverCount: 2,
     };
 
     // Generate terrain data
@@ -331,7 +347,14 @@ function renderRegionOverlays(
     width: number,
     height: number,
 ) {
-    // Tint story-specific regions on top of procedural terrain
+    // Tint story-specific regions on top of procedural terrain.
+    // The Calyndra borderlands have distinct zones:
+    //   - Thalanor (far west): near-black ancient dark forest
+    //   - Waldmeer (west-central): dense old-growth forest, dark green
+    //   - Nebelfelder (east): misty open plains
+    //   - Weideland (north-east): golden pasturelands
+    //   - Kingdom proper (far east): cultivated, open
+
     for (const region of data.featureRegions) {
         if (!region.svgPath) continue;
 
@@ -341,13 +364,13 @@ function renderRegionOverlays(
         let fillColor: string;
         switch (region.type) {
             case 'darkwood':
-                fillColor = 'rgba(5, 9, 16, 0.5)';
+                fillColor = 'rgba(3, 6, 10, 0.7)';
                 break;
             case 'forest':
-                fillColor = 'rgba(10, 25, 5, 0.25)';
+                fillColor = 'rgba(8, 20, 4, 0.4)';
                 break;
             default:
-                continue; // other regions don't need extra tinting
+                continue;
         }
 
         ctx.save();
@@ -357,7 +380,7 @@ function renderRegionOverlays(
         ctx.restore();
     }
 
-    // Fog effect for mist regions
+    // Fog/mist effect for the Nebelfelder region
     for (const region of data.featureRegions) {
         if (!region.fogEffect) continue;
         const { cx, cy, rx, ry } = region.fogEffect;
@@ -366,14 +389,31 @@ function renderRegionOverlays(
         const sRy = (ry / VIEW_H) * height;
 
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(sRx, sRy));
-        gradient.addColorStop(0, 'rgba(180, 190, 200, 0.12)');
-        gradient.addColorStop(0.6, 'rgba(160, 170, 180, 0.06)');
+        gradient.addColorStop(0, 'rgba(200, 210, 220, 0.18)');
+        gradient.addColorStop(0.5, 'rgba(170, 180, 190, 0.10)');
         gradient.addColorStop(1, 'rgba(140, 150, 160, 0)');
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.ellipse(p.x, p.y, sRx, sRy, 0, 0, Math.PI * 2);
         ctx.fill();
+    }
+
+    // Hills in the pastureland — gentle elevation bumps
+    for (const hill of data.hills) {
+        for (const shape of hill.shapes) {
+            const p = scaleCoord(shape.cx, shape.cy, VIEW_W, VIEW_H, width, height);
+            const rx = (shape.rx / VIEW_W) * width;
+            const ry = (shape.ry / VIEW_H) * height;
+
+            const grad = ctx.createRadialGradient(p.x, p.y - ry * 0.3, 0, p.x, p.y, Math.max(rx, ry));
+            grad.addColorStop(0, `rgba(180, 160, 100, ${shape.opacity * 0.15})`);
+            grad.addColorStop(1, 'rgba(120, 110, 70, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 }
 
