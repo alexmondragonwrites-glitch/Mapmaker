@@ -361,23 +361,49 @@ function renderRegionOverlays(
         const points = parseSVGPath(region.svgPath);
         const scaled = scalePoints(points, VIEW_W, VIEW_H, width, height);
 
-        let fillColor: string;
         switch (region.type) {
-            case 'darkwood':
-                fillColor = 'rgba(3, 6, 10, 0.7)';
+            case 'darkwood': {
+                // Thalanor: near-black ancient forest, almost opaque.
+                // First a solid dark base to hide any terrain underneath
+                ctx.save();
+                drawPointPath(ctx, scaled, true);
+                ctx.fillStyle = '#080c04';
+                ctx.fill();
+                // Then a subtle green-black gradient for depth
+                const dGrad = ctx.createLinearGradient(0, 0, scaled[0]?.x ?? 0, height);
+                dGrad.addColorStop(0, 'rgba(5, 12, 3, 0.9)');
+                dGrad.addColorStop(1, 'rgba(2, 4, 1, 0.95)');
+                ctx.fillStyle = dGrad;
+                ctx.fill();
+                ctx.restore();
                 break;
-            case 'forest':
-                fillColor = 'rgba(8, 20, 4, 0.4)';
+            }
+            case 'forest': {
+                // Waldmeer: dense old-growth, dark green canopy.
+                // Solid base layer so no terrain water peeks through
+                ctx.save();
+                drawPointPath(ctx, scaled, true);
+                ctx.fillStyle = 'rgba(15, 30, 8, 0.65)';
+                ctx.fill();
+                // Tree-canopy noise texture on top
+                const noise = new SimplexNoise(WORLD_SEED + 500);
+                ctx.clip();
+                for (let y = 0; y < height; y += 5) {
+                    for (let x = 0; x < width; x += 5) {
+                        const n = noise.noise2D(x / 30, y / 30);
+                        if (n > -0.1) {
+                            const g = 18 + n * 12;
+                            ctx.fillStyle = `rgba(${g * 0.4}, ${g}, ${g * 0.3}, ${0.15 + n * 0.1})`;
+                            ctx.fillRect(x, y, 5, 5);
+                        }
+                    }
+                }
+                ctx.restore();
                 break;
+            }
             default:
                 continue;
         }
-
-        ctx.save();
-        drawPointPath(ctx, scaled, true);
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-        ctx.restore();
     }
 
     // Fog/mist effect for the Nebelfelder region
