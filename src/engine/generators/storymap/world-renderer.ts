@@ -106,7 +106,6 @@ export function renderWorldOverview(
         const terrainCtx = terrainCanvas.getContext('2d')!;
 
         renderProceduralTerrain(terrainCtx, width, height);
-        renderRegionOverlays(terrainCtx, data, view, width, height);
 
         const mask = buildExploredMask(data, chapter, view, width, height, radiusMultiplier);
         terrainCtx.globalCompositeOperation = 'destination-in';
@@ -114,10 +113,8 @@ export function renderWorldOverview(
         terrainCtx.globalCompositeOperation = 'source-over';
 
         ctx.drawImage(terrainCanvas, 0, 0);
-        renderExploredEdge(ctx, mask, width, height);
     } else {
         renderProceduralTerrain(ctx, width, height);
-        renderRegionOverlays(ctx, data, view, width, height);
     }
 
     // ── 3. Paths ──
