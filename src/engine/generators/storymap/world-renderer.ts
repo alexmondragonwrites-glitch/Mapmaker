@@ -413,25 +413,7 @@ function renderFarmland(
 
     ctx.save();
 
-    // 1. Dirt roads/tracks winding through the farmland
-    ctx.strokeStyle = 'rgba(140, 115, 75, 0.35)';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    for (let ri = 0; ri < 4; ri++) {
-        ctx.beginPath();
-        const startX = width * (0.55 + ri * 0.1);
-        const startY = ri % 2 === 0 ? 20 : height - 20;
-        ctx.moveTo(startX, startY);
-        for (let step = 0; step < 30; step++) {
-            const t = step / 30;
-            const rx = startX + pathNoise.noise2D(step / 3, ri * 10) * width * 0.15;
-            const ry = startY + (ri % 2 === 0 ? 1 : -1) * t * height;
-            ctx.lineTo(rx, ry);
-        }
-        ctx.stroke();
-    }
-
-    // 2. Fields with natural gaps and density gradient
+    // Fields with natural gaps and density gradient
     for (let y = 25; y < height - 25; y += 16) {
         for (let x = 0; x < width - 25; x += 20) {
             const idx = y * width + Math.min(x, width - 1);
