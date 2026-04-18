@@ -459,44 +459,41 @@ function renderVegetation(
     const noise = new SimplexNoise(seed + 600);
     ctx.save();
 
-    // Grass tufts in medium-moisture areas (between forest and fields)
-    for (let y = 8; y < height - 8; y += 6) {
-        for (let x = 8; x < width - 8; x += 6) {
+    // Grass tufts — bigger, more visible, denser
+    for (let y = 6; y < height - 6; y += 5) {
+        for (let x = 6; x < width - 6; x += 5) {
             const idx = y * width + x;
             const m = moistureMap[idx];
-            // Only in the transition zone (not deep forest, not dense fields)
-            if (m < 0.30 || m > 0.60) continue;
-            const n = noise.noise2D(x / 20, y / 20);
-            if (n < 0.2) continue;
+            if (m < 0.28 || m > 0.62) continue;
+            const n = noise.noise2D(x / 18, y / 18);
+            if (n < 0.05) continue;
 
-            ctx.globalAlpha = 0.15 + n * 0.1;
-
-            // Small grass tufts — 2-3 blades
-            const bladeH = 3 + n * 2;
-            ctx.strokeStyle = `rgba(70, 100, 45, 0.8)`;
-            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = 0.4 + n * 0.2;
+            const bladeH = 5 + n * 4;
+            ctx.strokeStyle = 'rgba(60, 95, 35, 0.9)';
+            ctx.lineWidth = 0.8;
             for (let b = -1; b <= 1; b++) {
                 ctx.beginPath();
-                ctx.moveTo(x + b * 1.5, y);
-                ctx.lineTo(x + b * 2 + noise.noise2D(x + b, y) * 1.5, y - bladeH);
+                ctx.moveTo(x + b * 2, y);
+                ctx.lineTo(x + b * 2.5 + noise.noise2D(x + b, y) * 2, y - bladeH);
                 ctx.stroke();
             }
         }
     }
 
-    // Small flowers scattered in open meadows
-    for (let i = 0; i < 80; i++) {
+    // Flowers — bigger, more of them
+    for (let i = 0; i < 200; i++) {
         const fx = noise.noise2D(i * 2.3, 0) * width * 0.5 + width * 0.5;
         const fy = noise.noise2D(0, i * 2.3) * height * 0.8 + height * 0.1;
-        const fidx = Math.floor(fy) * width + Math.floor(Math.min(fx, width - 1));
+        const fidx = Math.floor(fy) * width + Math.floor(Math.min(Math.max(fx, 0), width - 1));
         if (fidx < 0 || fidx >= moistureMap.length) continue;
         if (moistureMap[fidx] > 0.55 || moistureMap[fidx] < 0.25) continue;
 
-        ctx.globalAlpha = 0.3;
-        const colors = ['#e8d44d', '#d4a0a0', '#b0c4de', '#daa520'];
+        ctx.globalAlpha = 0.6;
+        const colors = ['#e8d44d', '#d4a0a0', '#b0c4de', '#daa520', '#c87070', '#90b060'];
         ctx.fillStyle = colors[i % colors.length];
         ctx.beginPath();
-        ctx.arc(fx, fy, 1.2, 0, Math.PI * 2);
+        ctx.arc(fx, fy, 1.8, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -513,25 +510,21 @@ function renderContourLines(
     heightMap: Float32Array,
 ) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(100, 80, 50, 0.12)';
-    ctx.lineWidth = 0.5;
 
-    // Draw contour at several elevation levels
     const levels = [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75];
     for (const level of levels) {
-        for (let y = 1; y < height - 1; y += 2) {
-            for (let x = 1; x < width - 1; x += 2) {
+        for (let y = 1; y < height - 1; y += 1) {
+            for (let x = 1; x < width - 1; x += 1) {
                 const idx = y * width + x;
                 const h = heightMap[idx];
                 const hR = heightMap[idx + 1];
                 const hD = heightMap[(y + 1) * width + x];
 
-                // Edge detection at contour level
                 if (
                     (h >= level && hR < level) || (h < level && hR >= level) ||
                     (h >= level && hD < level) || (h < level && hD >= level)
                 ) {
-                    ctx.fillStyle = 'rgba(100, 80, 50, 0.12)';
+                    ctx.fillStyle = 'rgba(90, 70, 40, 0.25)';
                     ctx.fillRect(x, y, 1, 1);
                 }
             }
@@ -554,45 +547,42 @@ function renderFog(
     const noise = new SimplexNoise(seed + 400);
     ctx.save();
 
-    // Fog concentrates in low-lying areas and at the forest edge
-    for (let y = 0; y < height; y += 3) {
-        for (let x = 0; x < width; x += 3) {
+    // Pixel-level fog in low areas
+    for (let y = 0; y < height; y += 2) {
+        for (let x = 0; x < width; x += 2) {
             const idx = y * width + x;
             const h = heightMap[idx];
             const m = moistureMap[idx];
 
-            // Low elevation = more fog
-            const elevFog = Math.max(0, 0.3 - h) * 2;
-            // High moisture (forest edge) = more fog
-            const moistFog = m > 0.5 ? (m - 0.5) * 0.4 : 0;
-            // Noise variation
-            const fogNoise = noise.noise2D(x / 80, y / 80);
-            if (fogNoise < 0.1) continue;
+            const elevFog = Math.max(0, 0.35 - h) * 3;
+            const moistFog = m > 0.45 ? (m - 0.45) * 0.8 : 0;
+            const fogNoise = noise.noise2D(x / 60, y / 60);
+            if (fogNoise < -0.1) continue;
 
-            const fogAmount = (elevFog + moistFog) * fogNoise;
+            const fogAmount = (elevFog + moistFog) * (fogNoise + 0.3);
             if (fogAmount < 0.01) continue;
 
-            ctx.globalAlpha = Math.min(0.15, fogAmount);
-            ctx.fillStyle = 'rgba(220, 215, 200, 1)';
-            ctx.fillRect(x, y, 3, 3);
+            ctx.globalAlpha = Math.min(0.35, fogAmount);
+            ctx.fillStyle = 'rgba(225, 220, 205, 1)';
+            ctx.fillRect(x, y, 2, 2);
         }
     }
 
-    // Larger fog wisps along the forest edge
-    for (let i = 0; i < 12; i++) {
-        const fx = width * (0.35 + noise.noise2D(i * 3.7, 0) * 0.2);
-        const fy = height * (0.2 + noise.noise2D(0, i * 3.7) * 0.6);
-        const rx = 40 + noise.noise2D(i, i) * 30;
-        const ry = 15 + noise.noise2D(i + 5, i + 5) * 10;
+    // Larger fog wisps — bigger, more opaque
+    for (let i = 0; i < 20; i++) {
+        const fx = width * (0.3 + noise.noise2D(i * 3.7, 0) * 0.25);
+        const fy = height * (0.15 + noise.noise2D(0, i * 3.7) * 0.7);
+        const rx = 60 + noise.noise2D(i, i) * 40;
+        const ry = 20 + noise.noise2D(i + 5, i + 5) * 15;
 
         const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, rx);
-        grad.addColorStop(0, 'rgba(230, 225, 210, 0.12)');
-        grad.addColorStop(0.6, 'rgba(220, 215, 200, 0.06)');
-        grad.addColorStop(1, 'rgba(210, 205, 190, 0)');
+        grad.addColorStop(0, 'rgba(235, 230, 215, 0.25)');
+        grad.addColorStop(0.5, 'rgba(225, 220, 205, 0.12)');
+        grad.addColorStop(1, 'rgba(215, 210, 195, 0)');
         ctx.globalAlpha = 1;
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.ellipse(fx, fy, rx, ry, noise.noise2D(i * 2, 0) * 0.3, 0, Math.PI * 2);
+        ctx.ellipse(fx, fy, rx, ry, noise.noise2D(i * 2, 0) * 0.4, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -611,35 +601,35 @@ function renderPaperAging(
     const noise = new SimplexNoise(seed + 999);
     ctx.save();
 
-    // Coffee/tea stains — large subtle circular discolorations
-    for (let i = 0; i < 5; i++) {
+    // Coffee/tea stains — visible circular discolorations
+    for (let i = 0; i < 7; i++) {
         const sx = (noise.noise2D(i * 7.3, 0.5) * 0.5 + 0.5) * width;
         const sy = (noise.noise2D(0.5, i * 7.3) * 0.5 + 0.5) * height;
-        const sr = (0.04 + Math.abs(noise.noise2D(i * 3.1, i * 2.7)) * 0.08) * Math.min(width, height);
+        const sr = (0.06 + Math.abs(noise.noise2D(i * 3.1, i * 2.7)) * 0.12) * Math.min(width, height);
 
-        const gradient = ctx.createRadialGradient(sx, sy, sr * 0.2, sx, sy, sr);
-        gradient.addColorStop(0, 'rgba(139, 109, 69, 0.06)');
-        gradient.addColorStop(0.5, 'rgba(139, 109, 69, 0.03)');
-        gradient.addColorStop(1, 'rgba(139, 109, 69, 0)');
+        const gradient = ctx.createRadialGradient(sx, sy, sr * 0.15, sx, sy, sr);
+        gradient.addColorStop(0, 'rgba(130, 100, 55, 0.14)');
+        gradient.addColorStop(0.5, 'rgba(130, 100, 55, 0.06)');
+        gradient.addColorStop(1, 'rgba(130, 100, 55, 0)');
 
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
     }
 
-    // Foxing spots — tiny brown dots from aging
-    for (let i = 0; i < 30; i++) {
+    // Foxing spots — visible brown dots
+    for (let i = 0; i < 50; i++) {
         const fx = (noise.noise2D(i * 13.7, 1.3) * 0.5 + 0.5) * width;
         const fy = (noise.noise2D(1.3, i * 13.7) * 0.5 + 0.5) * height;
-        const fr = 0.8 + Math.abs(noise.noise2D(i * 5.1, i * 3.3)) * 2;
+        const fr = 1 + Math.abs(noise.noise2D(i * 5.1, i * 3.3)) * 2.5;
 
-        ctx.fillStyle = `rgba(120, 90, 50, ${0.06 + Math.abs(noise.noise2D(i, i)) * 0.06})`;
+        ctx.fillStyle = `rgba(110, 80, 40, ${0.12 + Math.abs(noise.noise2D(i, i)) * 0.1})`;
         ctx.beginPath();
         ctx.arc(fx, fy, fr, 0, Math.PI * 2);
         ctx.fill();
     }
 
-    // Edge darkening — parchment wears darker at edges
-    ctx.globalAlpha = 0.08;
+    // Edge darkening — clearly visible worn edges
+    ctx.globalAlpha = 0.15;
     const edgeGrad = ctx.createRadialGradient(
         width / 2, height / 2, Math.min(width, height) * 0.3,
         width / 2, height / 2, Math.max(width, height) * 0.6,
