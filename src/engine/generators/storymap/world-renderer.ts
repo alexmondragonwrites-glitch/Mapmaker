@@ -92,6 +92,10 @@ export function renderWorldOverview(
         forest:       cfg.layerForest !== false,
         farmland:     cfg.layerFarmland !== false,
         river:        cfg.layerRiver !== false,
+        fog:          cfg.layerFog !== false,
+        contours:     cfg.layerContours !== false,
+        vegetation:   cfg.layerVegetation !== false,
+        aging:        cfg.layerAging !== false,
         locations:    cfg.layerLocations !== false,
         paths:        cfg.layerPaths !== false,
         characters:   cfg.layerCharacters !== false,
@@ -274,6 +278,10 @@ interface LayerFlags {
     forest: boolean;
     farmland: boolean;
     river: boolean;
+    fog: boolean;
+    contours: boolean;
+    vegetation: boolean;
+    aging: boolean;
     locations: boolean;
     paths: boolean;
     characters: boolean;
@@ -291,7 +299,7 @@ function renderProceduralTerrain(
     width: number,
     height: number,
     seeds: LayerSeeds = { terrain: WORLD_SEED, forest: WORLD_SEED, farmland: 900 },
-    layers: LayerFlags = { terrain: true, forest: true, farmland: true, river: true, locations: true, paths: true, characters: true, supernatural: true },
+    layers: LayerFlags = { terrain: true, forest: true, farmland: true, river: true, fog: true, contours: true, vegetation: true, aging: true, locations: true, paths: true, characters: true, supernatural: true },
 ) {
     const rng = new SeededRandom(seeds.terrain);
 
@@ -417,6 +425,232 @@ function renderProceduralTerrain(
     if (layers.river) {
         renderSerenRiver(ctx, width, height);
     }
+
+    // Vegetation detail — grass tufts, shrubs in open areas
+    if (layers.vegetation) {
+        renderVegetation(ctx, width, height, moistureMap, seeds.terrain);
+    }
+
+    // Contour lines from heightmap
+    if (layers.contours) {
+        renderContourLines(ctx, width, height, heightMap);
+    }
+
+    // Fog/mist in valleys and at forest edge
+    if (layers.fog) {
+        renderFog(ctx, width, height, heightMap, moistureMap, seeds.terrain);
+    }
+
+    // Paper aging (stains, spots, wear)
+    if (layers.aging) {
+        renderPaperAging(ctx, width, height, seeds.terrain);
+    }
+}
+
+// ── Vegetation Detail ───────────────────────────────────────────
+
+function renderVegetation(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    moistureMap: Float32Array,
+    seed: number,
+) {
+    const noise = new SimplexNoise(seed + 600);
+    ctx.save();
+
+    // Grass tufts in medium-moisture areas (between forest and fields)
+    for (let y = 8; y < height - 8; y += 6) {
+        for (let x = 8; x < width - 8; x += 6) {
+            const idx = y * width + x;
+            const m = moistureMap[idx];
+            // Only in the transition zone (not deep forest, not dense fields)
+            if (m < 0.30 || m > 0.60) continue;
+            const n = noise.noise2D(x / 20, y / 20);
+            if (n < 0.2) continue;
+
+            ctx.globalAlpha = 0.15 + n * 0.1;
+
+            // Small grass tufts — 2-3 blades
+            const bladeH = 3 + n * 2;
+            ctx.strokeStyle = `rgba(70, 100, 45, 0.8)`;
+            ctx.lineWidth = 0.5;
+            for (let b = -1; b <= 1; b++) {
+                ctx.beginPath();
+                ctx.moveTo(x + b * 1.5, y);
+                ctx.lineTo(x + b * 2 + noise.noise2D(x + b, y) * 1.5, y - bladeH);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // Small flowers scattered in open meadows
+    for (let i = 0; i < 80; i++) {
+        const fx = noise.noise2D(i * 2.3, 0) * width * 0.5 + width * 0.5;
+        const fy = noise.noise2D(0, i * 2.3) * height * 0.8 + height * 0.1;
+        const fidx = Math.floor(fy) * width + Math.floor(Math.min(fx, width - 1));
+        if (fidx < 0 || fidx >= moistureMap.length) continue;
+        if (moistureMap[fidx] > 0.55 || moistureMap[fidx] < 0.25) continue;
+
+        ctx.globalAlpha = 0.3;
+        const colors = ['#e8d44d', '#d4a0a0', '#b0c4de', '#daa520'];
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.beginPath();
+        ctx.arc(fx, fy, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+// ── Contour Lines ───────────────────────────────────────────────
+
+function renderContourLines(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    heightMap: Float32Array,
+) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(100, 80, 50, 0.12)';
+    ctx.lineWidth = 0.5;
+
+    // Draw contour at several elevation levels
+    const levels = [0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75];
+    for (const level of levels) {
+        for (let y = 1; y < height - 1; y += 2) {
+            for (let x = 1; x < width - 1; x += 2) {
+                const idx = y * width + x;
+                const h = heightMap[idx];
+                const hR = heightMap[idx + 1];
+                const hD = heightMap[(y + 1) * width + x];
+
+                // Edge detection at contour level
+                if (
+                    (h >= level && hR < level) || (h < level && hR >= level) ||
+                    (h >= level && hD < level) || (h < level && hD >= level)
+                ) {
+                    ctx.fillStyle = 'rgba(100, 80, 50, 0.12)';
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+    }
+
+    ctx.restore();
+}
+
+// ── Fog / Mist ──────────────────────────────────────────────────
+
+function renderFog(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    heightMap: Float32Array,
+    moistureMap: Float32Array,
+    seed: number,
+) {
+    const noise = new SimplexNoise(seed + 400);
+    ctx.save();
+
+    // Fog concentrates in low-lying areas and at the forest edge
+    for (let y = 0; y < height; y += 3) {
+        for (let x = 0; x < width; x += 3) {
+            const idx = y * width + x;
+            const h = heightMap[idx];
+            const m = moistureMap[idx];
+
+            // Low elevation = more fog
+            const elevFog = Math.max(0, 0.3 - h) * 2;
+            // High moisture (forest edge) = more fog
+            const moistFog = m > 0.5 ? (m - 0.5) * 0.4 : 0;
+            // Noise variation
+            const fogNoise = noise.noise2D(x / 80, y / 80);
+            if (fogNoise < 0.1) continue;
+
+            const fogAmount = (elevFog + moistFog) * fogNoise;
+            if (fogAmount < 0.01) continue;
+
+            ctx.globalAlpha = Math.min(0.15, fogAmount);
+            ctx.fillStyle = 'rgba(220, 215, 200, 1)';
+            ctx.fillRect(x, y, 3, 3);
+        }
+    }
+
+    // Larger fog wisps along the forest edge
+    for (let i = 0; i < 12; i++) {
+        const fx = width * (0.35 + noise.noise2D(i * 3.7, 0) * 0.2);
+        const fy = height * (0.2 + noise.noise2D(0, i * 3.7) * 0.6);
+        const rx = 40 + noise.noise2D(i, i) * 30;
+        const ry = 15 + noise.noise2D(i + 5, i + 5) * 10;
+
+        const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, rx);
+        grad.addColorStop(0, 'rgba(230, 225, 210, 0.12)');
+        grad.addColorStop(0.6, 'rgba(220, 215, 200, 0.06)');
+        grad.addColorStop(1, 'rgba(210, 205, 190, 0)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(fx, fy, rx, ry, noise.noise2D(i * 2, 0) * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+// ── Paper Aging ─────────────────────────────────────────────────
+
+function renderPaperAging(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    seed: number,
+) {
+    const noise = new SimplexNoise(seed + 999);
+    ctx.save();
+
+    // Coffee/tea stains — large subtle circular discolorations
+    for (let i = 0; i < 5; i++) {
+        const sx = (noise.noise2D(i * 7.3, 0.5) * 0.5 + 0.5) * width;
+        const sy = (noise.noise2D(0.5, i * 7.3) * 0.5 + 0.5) * height;
+        const sr = (0.04 + Math.abs(noise.noise2D(i * 3.1, i * 2.7)) * 0.08) * Math.min(width, height);
+
+        const gradient = ctx.createRadialGradient(sx, sy, sr * 0.2, sx, sy, sr);
+        gradient.addColorStop(0, 'rgba(139, 109, 69, 0.06)');
+        gradient.addColorStop(0.5, 'rgba(139, 109, 69, 0.03)');
+        gradient.addColorStop(1, 'rgba(139, 109, 69, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+    }
+
+    // Foxing spots — tiny brown dots from aging
+    for (let i = 0; i < 30; i++) {
+        const fx = (noise.noise2D(i * 13.7, 1.3) * 0.5 + 0.5) * width;
+        const fy = (noise.noise2D(1.3, i * 13.7) * 0.5 + 0.5) * height;
+        const fr = 0.8 + Math.abs(noise.noise2D(i * 5.1, i * 3.3)) * 2;
+
+        ctx.fillStyle = `rgba(120, 90, 50, ${0.06 + Math.abs(noise.noise2D(i, i)) * 0.06})`;
+        ctx.beginPath();
+        ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Edge darkening — parchment wears darker at edges
+    ctx.globalAlpha = 0.08;
+    const edgeGrad = ctx.createRadialGradient(
+        width / 2, height / 2, Math.min(width, height) * 0.3,
+        width / 2, height / 2, Math.max(width, height) * 0.6,
+    );
+    edgeGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    edgeGrad.addColorStop(1, 'rgba(80, 50, 20, 1)');
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
 }
 
 // ── Farmland Pattern ───────────────────────────────────────────
