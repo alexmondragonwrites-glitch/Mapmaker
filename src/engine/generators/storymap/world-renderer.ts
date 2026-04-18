@@ -307,19 +307,41 @@ function renderProceduralTerrain(
         width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
     );
 
-    // Bias moisture: west = dense forest, east = green pasture/farmland.
-    // West side: Thalanor/Waldmeer (dark forest, moisture ~0.85)
-    // Center: transition zone (mixed, moisture ~0.55)
-    // East side: Weidland/Calyndra (green pastures + fields, moisture ~0.35)
-    // NOT dry desert — the east is cultivated green land, just not forest.
+    // Bias moisture: west = dense forest, east = green pasture.
+    // Use noise to create an IRREGULAR forest edge instead of a
+    // straight vertical line. The boundary meanders naturally.
+    const edgeNoise = new SimplexNoise(WORLD_SEED + 777);
     for (let y = 0; y < height; y++) {
+        // The forest edge position varies per row via noise
+        const edgeBase = 0.48;
+        const edgeWobble = edgeNoise.noise2D(0, y / 80) * 0.12
+            + edgeNoise.noise2D(0, y / 30) * 0.06;
+        const forestEdge = edgeBase + edgeWobble;
+
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            const t = x / width; // 0 = far west, 1 = far east
-            // Forest bias: 0.85 in west, 0.35 in east (still green!)
-            const forestBias = 0.85 - t * 0.5;
-            const biased = moistureMap[idx] * 0.25 + forestBias * 0.75;
-            moistureMap[idx] = Math.max(0.25, biased);
+            const t = x / width;
+
+            // Smooth transition centered on the noise-perturbed edge
+            let forestT: number;
+            if (t < forestEdge - 0.08) {
+                forestT = 1; // deep forest
+            } else if (t > forestEdge + 0.08) {
+                forestT = 0; // open farmland
+            } else {
+                // Transition band with micro-noise for irregular patches
+                const localNoise = edgeNoise.noise2D(x / 25, y / 25) * 0.15;
+                forestT = 1 - ((t - (forestEdge - 0.08)) / 0.16) + localNoise;
+                forestT = Math.max(0, Math.min(1, forestT));
+            }
+
+            const forestMoisture = 0.85;
+            const farmMoisture = 0.38;
+            const biased = forestT * forestMoisture + (1 - forestT) * farmMoisture;
+            moistureMap[idx] = Math.max(0.28, moistureMap[idx] * 0.2 + biased * 0.8);
+
+            // Force heightmap above sea level (removes blue patches)
+            if (heightMap[idx] < 0.05) heightMap[idx] = 0.05 + Math.abs(edgeNoise.noise2D(x / 50, y / 50)) * 0.1;
         }
     }
 
@@ -374,83 +396,110 @@ function renderFarmland(
     height: number,
     moistureMap: Float32Array,
 ) {
-    // Colorful patchwork of crop fields in the eastern farmland.
-    // Each field is a filled rectangle in green, golden, or brown
-    // tones — like the cultivated Weidland around Willow Brook.
     const noise = new SimplexNoise(WORLD_SEED + 900);
     const noise2 = new SimplexNoise(WORLD_SEED + 901);
+    const pathNoise = new SimplexNoise(WORLD_SEED + 902);
 
-    // Field color palette: greens, golds, browns
     const fieldColors = [
-        'rgba(95, 120, 55, 0.7)',   // dark green (crops)
-        'rgba(130, 155, 70, 0.65)', // medium green
-        'rgba(155, 170, 80, 0.6)',  // yellow-green
-        'rgba(175, 160, 80, 0.6)',  // golden (wheat)
-        'rgba(190, 170, 90, 0.55)', // light gold
-        'rgba(145, 120, 65, 0.6)',  // brown (plowed)
-        'rgba(120, 105, 55, 0.55)', // dark brown (fallow)
-        'rgba(110, 140, 65, 0.65)', // fresh green
+        [95, 120, 55],   // dark green
+        [130, 155, 70],  // medium green
+        [155, 170, 80],  // yellow-green
+        [175, 160, 80],  // golden wheat
+        [190, 170, 90],  // light gold
+        [145, 120, 65],  // brown plowed
+        [120, 105, 55],  // dark brown fallow
+        [110, 140, 65],  // fresh green
     ];
 
     ctx.save();
 
-    // Only draw fields in the eastern part (right ~45% of map)
-    const fieldStartX = Math.floor(width * 0.55);
+    // 1. Dirt roads/tracks winding through the farmland
+    ctx.strokeStyle = 'rgba(140, 115, 75, 0.35)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (let ri = 0; ri < 4; ri++) {
+        ctx.beginPath();
+        const startX = width * (0.55 + ri * 0.1);
+        const startY = ri % 2 === 0 ? 20 : height - 20;
+        ctx.moveTo(startX, startY);
+        for (let step = 0; step < 30; step++) {
+            const t = step / 30;
+            const rx = startX + pathNoise.noise2D(step / 3, ri * 10) * width * 0.15;
+            const ry = startY + (ri % 2 === 0 ? 1 : -1) * t * height;
+            ctx.lineTo(rx, ry);
+        }
+        ctx.stroke();
+    }
 
-    for (let y = 30; y < height - 30; y += 18) {
-        for (let x = fieldStartX; x < width - 30; x += 22) {
-            // Noise decides if there's a field here (irregular coverage)
-            const pn = noise.noise2D(x / 80, y / 80);
-            if (pn < -0.15) continue;
+    // 2. Fields with natural gaps and density gradient
+    for (let y = 25; y < height - 25; y += 16) {
+        for (let x = 0; x < width - 25; x += 20) {
+            const idx = y * width + Math.min(x, width - 1);
+            const moisture = moistureMap[idx];
+            // Only place fields where moisture is low (farmland areas)
+            if (moisture > 0.55) continue;
 
-            // Field dimensions — irregular sizes
-            const fw = 14 + Math.floor(noise2.noise2D(x / 30, y / 30) * 10 + pn * 8);
-            const fh = 10 + Math.floor(noise2.noise2D(x / 40, y / 40 + 5) * 8);
-            const angle = noise.noise2D(x / 250, y / 250) * 0.12;
+            // Density fades near the forest edge (cluster noise)
+            const clusterN = noise.noise2D(x / 100, y / 100);
+            if (clusterN < -0.1) continue; // natural meadow gaps
 
-            // Pick color from palette based on noise
-            const colorIdx = Math.floor((noise.noise2D(x / 50 + 10, y / 50 + 10) + 1) * 4) % fieldColors.length;
+            // Skip some spots for pasture variety
+            const gapN = noise2.noise2D(x / 40, y / 40);
+            if (gapN < -0.3) continue;
+
+            // Field size varies with distance from forest
+            const farmIntensity = Math.max(0, 1 - moisture * 1.5);
+            const fw = 12 + Math.floor(noise2.noise2D(x / 30, y / 30) * 10) * farmIntensity;
+            const fh = 8 + Math.floor(noise2.noise2D(x / 35, y / 35 + 5) * 7) * farmIntensity;
+            if (fw < 5 || fh < 4) continue;
+
+            const angle = noise.noise2D(x / 200, y / 200) * 0.18;
+            const colorIdx = Math.floor((noise.noise2D(x / 45 + 10, y / 45 + 10) + 1) * 4) % fieldColors.length;
+            const [cr, cg, cb] = fieldColors[colorIdx];
+            const alpha = 0.5 + farmIntensity * 0.25;
 
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(angle);
 
-            // Filled field parcel
-            ctx.fillStyle = fieldColors[colorIdx];
+            ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${alpha})`;
             ctx.fillRect(0, 0, fw, fh);
 
-            // Thin border (hedge/fence line)
-            ctx.strokeStyle = 'rgba(70, 55, 30, 0.4)';
-            ctx.lineWidth = 0.7;
+            ctx.strokeStyle = `rgba(70, 55, 30, ${0.25 + farmIntensity * 0.2})`;
+            ctx.lineWidth = 0.6;
             ctx.strokeRect(0, 0, fw, fh);
 
-            // Subtle crop row lines inside
-            ctx.strokeStyle = 'rgba(60, 50, 25, 0.2)';
-            ctx.lineWidth = 0.3;
-            const rowSpacing = 3;
-            for (let ry = rowSpacing; ry < fh; ry += rowSpacing) {
-                ctx.beginPath();
-                ctx.moveTo(1, ry);
-                ctx.lineTo(fw - 1, ry);
-                ctx.stroke();
+            // Crop rows only in larger fields
+            if (fw > 10 && fh > 6) {
+                ctx.strokeStyle = `rgba(60, 50, 25, 0.15)`;
+                ctx.lineWidth = 0.3;
+                for (let ry = 3; ry < fh; ry += 3) {
+                    ctx.beginPath();
+                    ctx.moveTo(1, ry);
+                    ctx.lineTo(fw - 1, ry);
+                    ctx.stroke();
+                }
             }
 
             ctx.restore();
         }
     }
 
-    // Scattered small trees/bushes along field boundaries
-    ctx.globalAlpha = 0.4;
-    for (let i = 0; i < 60; i++) {
-        const fx = width * 0.58 + noise.noise2D(i, 0) * width * 0.36;
-        const fy = height * 0.1 + noise.noise2D(0, i) * height * 0.8;
-        const sz = 2.5 + noise2.noise2D(i * 3, i * 7) * 2;
-        ctx.fillStyle = `rgba(50, 80, 35, 0.7)`;
+    // 3. Hedgerow trees scattered along field edges & meadows
+    for (let i = 0; i < 80; i++) {
+        const fx = noise.noise2D(i * 1.7, 0) * width * 0.5 + width * 0.5;
+        const fy = noise.noise2D(0, i * 1.7) * height * 0.8 + height * 0.1;
+        const fidx = Math.floor(fy) * width + Math.floor(Math.min(fx, width - 1));
+        if (fidx >= 0 && fidx < moistureMap.length && moistureMap[fidx] > 0.55) continue;
+        const sz = 2 + noise2.noise2D(i * 3, i * 7) * 2.5;
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = 'rgba(55, 85, 35, 0.8)';
         ctx.beginPath();
         ctx.arc(fx, fy, sz, 0, Math.PI * 2);
         ctx.fill();
     }
 
+    ctx.globalAlpha = 1;
     ctx.restore();
 }
 
