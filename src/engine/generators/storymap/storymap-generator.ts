@@ -42,15 +42,27 @@ export class StoryMapGenerator {
         this.defaultConfig = {
             seed: 42,
             width: 1200,
-            height: 780,          // ~1000:650 aspect ratio
-            chapter: 1,            // P=0, chapters 1-7
+            height: 780,
+            chapter: 1,
             showPaths: true,
             showCharacters: true,
             showSupernatural: true,
             showLabels: true,
-            useExploredArea: true,  // Only render terrain in explored area
-            exploredRadius: 1,      // Multiplier for exploration radius
-            _viewLevel: 'world',           // 'world' | 'detail'
+            useExploredArea: true,
+            exploredRadius: 1,
+            // Layer system: per-layer visibility + seed
+            layerTerrain: true,
+            layerForest: true,
+            layerFarmland: true,
+            layerLocations: true,
+            layerPaths: true,
+            layerCharacters: true,
+            layerSupernatural: true,
+            layerRiver: true,
+            terrainSeed: 42,
+            forestSeed: 42,
+            farmlandSeed: 900,
+            _viewLevel: 'world',
             _detailLocationId: null as string | null,
         };
     }
@@ -83,10 +95,20 @@ export class StoryMapGenerator {
             },
             { type: 'checkbox', key: 'useExploredArea', label: 'Nur erforschter Bereich' },
             { type: 'range', key: 'exploredRadius', label: 'Radius erforscht', min: 0.5, max: 2.5, step: 0.1 },
-            { type: 'checkbox', key: 'showPaths', label: 'Wege anzeigen' },
-            { type: 'checkbox', key: 'showCharacters', label: 'Charaktere anzeigen' },
-            { type: 'checkbox', key: 'showSupernatural', label: 'Übernatürliches anzeigen' },
-            { type: 'checkbox', key: 'showLabels', label: 'Beschriftungen' },
+            // Layer toggles
+            { type: 'checkbox', key: 'layerTerrain', label: '🗺️ Terrain' },
+            { type: 'checkbox', key: 'layerForest', label: '🌲 Wald' },
+            { type: 'checkbox', key: 'layerFarmland', label: '🌾 Farmland' },
+            { type: 'checkbox', key: 'layerRiver', label: '🏞️ Fluss (Seren)' },
+            { type: 'checkbox', key: 'layerLocations', label: '📍 Orte' },
+            { type: 'checkbox', key: 'layerPaths', label: '🛤️ Wege' },
+            { type: 'checkbox', key: 'layerCharacters', label: '👤 Charaktere' },
+            { type: 'checkbox', key: 'layerSupernatural', label: '✨ Übernatürliches' },
+            { type: 'checkbox', key: 'showLabels', label: '🏷️ Beschriftungen' },
+            // Per-layer seeds
+            { type: 'number', key: 'terrainSeed', label: 'Terrain-Seed', min: 0, max: 999999 },
+            { type: 'number', key: 'forestSeed', label: 'Wald-Seed', min: 0, max: 999999 },
+            { type: 'number', key: 'farmlandSeed', label: 'Farmland-Seed', min: 0, max: 999999 },
         ];
     }
 

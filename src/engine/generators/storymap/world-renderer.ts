@@ -82,16 +82,29 @@ export function renderWorldOverview(
 ) {
     const width = cfg.width as number;
     const height = cfg.height as number;
-    const showPaths = cfg.showPaths as boolean;
-    const showCharacters = cfg.showCharacters as boolean;
-    const showSupernatural = cfg.showSupernatural as boolean;
     const showLabels = cfg.showLabels as boolean;
     const useExploredArea = cfg.useExploredArea !== false;
     const radiusMultiplier = (cfg.exploredRadius as number) ?? 1;
 
-    // Compute dynamic viewport from ALL location positions.
-    // This is the key to "the map grows with your story": adding a
-    // location far away auto-extends the bounds.
+    // Layer visibility flags
+    const layers = {
+        terrain:      cfg.layerTerrain !== false,
+        forest:       cfg.layerForest !== false,
+        farmland:     cfg.layerFarmland !== false,
+        river:        cfg.layerRiver !== false,
+        locations:    cfg.layerLocations !== false,
+        paths:        cfg.layerPaths !== false,
+        characters:   cfg.layerCharacters !== false,
+        supernatural: cfg.layerSupernatural !== false,
+    };
+
+    // Per-layer seeds
+    const seeds = {
+        terrain:  (cfg.terrainSeed as number) ?? WORLD_SEED,
+        forest:   (cfg.forestSeed as number) ?? WORLD_SEED,
+        farmland: (cfg.farmlandSeed as number) ?? 900,
+    };
+
     const view = computeWorldBounds(data);
 
     // ── 1. Terra Incognita background ──
@@ -100,13 +113,13 @@ export function renderWorldOverview(
     // ── 2. Terrain + explored-area mask ──
     const visibleLocations = getVisibleLocations(data, chapter);
 
-    if (useExploredArea && visibleLocations.length > 0) {
+    if (layers.terrain && useExploredArea && visibleLocations.length > 0) {
         const terrainCanvas = document.createElement('canvas');
         terrainCanvas.width = width;
         terrainCanvas.height = height;
         const terrainCtx = terrainCanvas.getContext('2d')!;
 
-        renderProceduralTerrain(terrainCtx, width, height);
+        renderProceduralTerrain(terrainCtx, width, height, seeds, layers);
 
         const mask = buildExploredMask(data, chapter, view, width, height, radiusMultiplier);
         terrainCtx.globalCompositeOperation = 'destination-in';
@@ -114,25 +127,27 @@ export function renderWorldOverview(
         terrainCtx.globalCompositeOperation = 'source-over';
 
         ctx.drawImage(terrainCanvas, 0, 0);
-    } else {
-        renderProceduralTerrain(ctx, width, height);
+    } else if (layers.terrain) {
+        renderProceduralTerrain(ctx, width, height, seeds, layers);
     }
 
     // ── 3. Paths ──
-    if (showPaths) {
+    if (layers.paths) {
         renderWorldPaths(ctx, data, chapter, view, width, height);
     }
 
     // ── 4. Location nodes ──
-    renderLocationNodes(ctx, data, visibleLocations, chapter, view, width, height, showLabels);
+    if (layers.locations) {
+        renderLocationNodes(ctx, data, visibleLocations, chapter, view, width, height, showLabels);
+    }
 
     // ── 5. Character markers ──
-    if (showCharacters) {
+    if (layers.characters) {
         renderCharacterMarkers(ctx, data, visibleLocations, chapter, view, width, height);
     }
 
     // ── 6. Supernatural indicators ──
-    if (showSupernatural) {
+    if (layers.supernatural) {
         renderSupernaturalIndicators(ctx, data, visibleLocations, chapter, view, width, height);
     }
 
@@ -254,12 +269,31 @@ function renderTerraIncognitaLabel(
 
 // ── Procedural Terrain ──────────────────────────────────────────
 
+interface LayerFlags {
+    terrain: boolean;
+    forest: boolean;
+    farmland: boolean;
+    river: boolean;
+    locations: boolean;
+    paths: boolean;
+    characters: boolean;
+    supernatural: boolean;
+}
+
+interface LayerSeeds {
+    terrain: number;
+    forest: number;
+    farmland: number;
+}
+
 function renderProceduralTerrain(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
+    seeds: LayerSeeds = { terrain: WORLD_SEED, forest: WORLD_SEED, farmland: 900 },
+    layers: LayerFlags = { terrain: true, forest: true, farmland: true, river: true, locations: true, paths: true, characters: true, supernatural: true },
 ) {
-    const rng = new SeededRandom(WORLD_SEED);
+    const rng = new SeededRandom(seeds.terrain);
 
     // Regional-scale terrain config: the story plays in the western
     // borderlands of Calyndra — a few villages, forest edges, and
@@ -279,7 +313,7 @@ function renderProceduralTerrain(
     //     forest (Thalanor to the west, Waldmeer to the south)
     //   - riverCount low: just a couple of streams
     const terrainCfg = {
-        seed: WORLD_SEED,
+        seed: seeds.terrain,
         width,
         height,
         scale: 6,
@@ -291,26 +325,26 @@ function renderProceduralTerrain(
         riverCount: 0,
     };
 
-    // Generate terrain data
+    // Generate terrain data using per-layer seeds
     const heightMap = generateAdvancedHeightMap(width, height, {
-        seed: WORLD_SEED,
+        seed: seeds.terrain,
         scale: terrainCfg.scale,
         continentShape: terrainCfg.continentShape,
         seaLevel: terrainCfg.seaLevel,
     });
 
     const temperatureMap = generateTemperatureMap(
-        width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
+        width, height, heightMap, terrainCfg.seaLevel, seeds.terrain,
     );
 
     const moistureMap = generateAdvancedMoistureMap(
-        width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
+        width, height, heightMap, terrainCfg.seaLevel, seeds.terrain,
     );
 
     // Bias moisture: west = dense forest, east = green pasture.
     // Use noise to create an IRREGULAR forest edge instead of a
     // straight vertical line. The boundary meanders naturally.
-    const edgeNoise = new SimplexNoise(WORLD_SEED + 777);
+    const edgeNoise = new SimplexNoise(seeds.terrain + 777);
     for (let y = 0; y < height; y++) {
         // The forest edge position varies per row via noise
         const edgeBase = 0.48;
@@ -359,34 +393,30 @@ function renderProceduralTerrain(
         ambient: 0.4,
     });
 
-    // Painted forest masses — creates the lush green canopy areas
-    // that give the map its "Valcia" look. The moisture bias ensures
-    // forests concentrate in the west (Thalanor/Waldmeer) and thin
-    // out toward the east (farmland). This is the main visual
-    // difference from the parchment-only look.
-    renderPaintedForests(
-        ctx, width, height, heightMap, moistureMap, temperatureMap,
-        terrainCfg.seaLevel, terrainCfg.mountainLevel,
-        terrainCfg.forestDensity, WORLD_SEED,
-    );
-
-    // Individual trees at forest edges only — we hide trees in
-    // medium/low moisture areas by zeroing out those moisture
-    // values temporarily. This prevents the tiny tree dots from
-    // scattering across the open farmland where they look like
-    // ugly speckles. Trees only appear in true forest (m > 0.65).
-    const forestOnlyMoisture = new Float32Array(moistureMap.length);
-    for (let i = 0; i < moistureMap.length; i++) {
-        forestOnlyMoisture[i] = moistureMap[i] > 0.65 ? moistureMap[i] : 0;
+    // Forest layer — painted masses + individual trees
+    if (layers.forest) {
+        const forestRng = new SeededRandom(seeds.forest);
+        renderPaintedForests(
+            ctx, width, height, heightMap, moistureMap, temperatureMap,
+            terrainCfg.seaLevel, terrainCfg.mountainLevel,
+            terrainCfg.forestDensity, seeds.forest,
+        );
+        const forestOnlyMoisture = new Float32Array(moistureMap.length);
+        for (let i = 0; i < moistureMap.length; i++) {
+            forestOnlyMoisture[i] = moistureMap[i] > 0.65 ? moistureMap[i] : 0;
+        }
+        renderBookNaturalForests(ctx, terrainCfg, heightMap, forestOnlyMoisture, temperatureMap, forestRng);
     }
-    renderBookNaturalForests(ctx, terrainCfg, heightMap, forestOnlyMoisture, temperatureMap, rng);
 
-    // Farmland patterns in the east (dry/low-moisture areas)
-    renderFarmland(ctx, width, height, moistureMap);
+    // Farmland layer
+    if (layers.farmland) {
+        renderFarmland(ctx, width, height, moistureMap, seeds.farmland);
+    }
 
-    // Seren river — the story-specific river that flows through
-    // Willow Brook and is a key landmark in Alina's chapters.
-    renderSerenRiver(ctx, width, height);
+    // River layer
+    if (layers.river) {
+        renderSerenRiver(ctx, width, height);
+    }
 }
 
 // ── Farmland Pattern ───────────────────────────────────────────
@@ -396,10 +426,11 @@ function renderFarmland(
     width: number,
     height: number,
     moistureMap: Float32Array,
+    farmSeed: number = 900,
 ) {
-    const noise = new SimplexNoise(WORLD_SEED + 900);
-    const noise2 = new SimplexNoise(WORLD_SEED + 901);
-    const pathNoise = new SimplexNoise(WORLD_SEED + 902);
+    const noise = new SimplexNoise(farmSeed);
+    const noise2 = new SimplexNoise(farmSeed + 1);
+    const pathNoise = new SimplexNoise(farmSeed + 2);
 
     const fieldColors = [
         [95, 120, 55],   // dark green
