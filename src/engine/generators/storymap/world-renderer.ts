@@ -358,10 +358,138 @@ function renderProceduralTerrain(
         width, height, heightMap, terrainCfg.mountainLevel, rng,
     );
     renderBookMountainRidges(ctx, terrainCfg, ridgePoints, rng);
+
+    // Farmland patterns in the east (dry/low-moisture areas)
+    renderFarmland(ctx, width, height, moistureMap);
+
+    // Seren river — the story-specific river that flows through
+    // Willow Brook and is a key landmark in Alina's chapters.
+    renderSerenRiver(ctx, width, height);
 }
 
-// ── (Region Overlays removed — terrain biome gradient handles
-//     forest/farmland transition directly via moisture bias) ──
+// ── Farmland Pattern ───────────────────────────────────────────
+
+function renderFarmland(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    moistureMap: Float32Array,
+) {
+    // Add subtle field patterns in low-moisture (dry/farmland) areas.
+    // Creates the impression of cultivated land without looking like
+    // a grid paintover.
+    const noise = new SimplexNoise(WORLD_SEED + 900);
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+
+    for (let y = 10; y < height - 10; y += 3) {
+        for (let x = 10; x < width - 10; x += 3) {
+            const idx = y * width + x;
+            const m = moistureMap[idx];
+            // Only paint where moisture is low (east side, farmland)
+            if (m > 0.35) continue;
+            // Break up into irregular field patches via noise
+            const patchNoise = noise.noise2D(x / 70, y / 70);
+            if (patchNoise < 0.15) continue;
+
+            // Alternate short horizontal dashes for crop-row effect
+            const rowNoise = noise.noise2D(x / 15, y / 6);
+            if (rowNoise > 0.2) {
+                const shade = 120 + rowNoise * 30;
+                ctx.fillStyle = `rgb(${shade}, ${shade * 0.9}, ${shade * 0.6})`;
+                ctx.fillRect(x, y, 2, 1);
+            }
+        }
+    }
+    ctx.restore();
+}
+
+// ── Seren River ────────────────────────────────────────────────
+
+function renderSerenRiver(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+) {
+    // The Seren flows from a spring south of Willow Brook, curves
+    // through the village, then meanders eastward into the open
+    // farmland. Rendered in the world viewBox coordinates.
+    // Willow Brook is at roughly world (800, 292) — we'll draw the
+    // river going through that area.
+    //
+    // All coordinates here are in pixels (already canvas-scaled),
+    // computed as approximate fractions of the canvas.
+    const sx = width;
+    const sy = height;
+
+    const noise = new SimplexNoise(WORLD_SEED + 300);
+
+    ctx.save();
+
+    // Build a meandering path through the eastern half of the map
+    const pathPts: { x: number; y: number }[] = [];
+    const startX = sx * 0.72;
+    const startY = sy * 0.75;  // spring south of village
+    const endX = sx * 0.98;
+    const endY = sy * 0.48;    // flowing northeast off the map
+    const steps = 40;
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const bx = startX + (endX - startX) * t;
+        const by = startY + (endY - startY) * t;
+        // Meander with noise perpendicular to the line
+        const meander = noise.noise2D(t * 5, 0) * sy * 0.04;
+        const meander2 = noise.noise2D(t * 12, 1) * sy * 0.015;
+        pathPts.push({
+            x: bx + Math.cos(Math.PI / 2) * meander,
+            y: by + meander + meander2,
+        });
+    }
+
+    // River shadow (darker edges)
+    ctx.strokeStyle = 'rgba(40, 80, 110, 0.5)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pathPts[0].x, pathPts[0].y);
+    for (const p of pathPts) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+
+    // River body
+    ctx.strokeStyle = 'rgba(80, 130, 170, 0.85)';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(pathPts[0].x, pathPts[0].y);
+    for (const p of pathPts) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+
+    // River highlight (lighter center)
+    ctx.strokeStyle = 'rgba(150, 190, 220, 0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(pathPts[0].x, pathPts[0].y);
+    for (const p of pathPts) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+
+    // Label "Seren"
+    const midIdx = Math.floor(pathPts.length / 2);
+    const mid = pathPts[midIdx];
+    ctx.save();
+    const p1 = pathPts[midIdx - 1];
+    const p2 = pathPts[midIdx + 1];
+    const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    ctx.translate(mid.x, mid.y - 10);
+    ctx.rotate(angle);
+    ctx.font = 'italic 13px "Palatino Linotype", serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(40, 80, 110, 0.85)';
+    ctx.fillText('~ Seren ~', 0, 0);
+    ctx.restore();
+
+    ctx.restore();
+}
 
 // ── World Paths ─────────────────────────────────────────────────
 
@@ -428,22 +556,43 @@ function renderLocationNodes(
         renderLocationIcon(ctx, loc, p.x, p.y, destroyed);
         ctx.restore();
 
-        // Label
+        // Label with parchment cartouche for readability
         if (showLabels) {
             ctx.save();
-            ctx.font = loc.type === 'village'
-                ? 'bold 11px "Palatino Linotype", serif'
-                : '10px "Palatino Linotype", serif';
+            const isVillage = loc.type === 'village';
+            const fontSize = isVillage ? 14 : 12;
+            ctx.font = isVillage
+                ? `bold ${fontSize}px "Palatino Linotype", serif`
+                : `${fontSize}px "Palatino Linotype", serif`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
+            ctx.textBaseline = 'middle';
 
             const labelY = p.y + getLabelOffset(loc.type);
+            const text = loc.name.de;
+            const metrics = ctx.measureText(text);
+            const padX = 6;
+            const padY = 3;
+            const w = metrics.width + padX * 2;
+            const h = fontSize + padY * 2;
 
-            // Shadow for readability
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillText(loc.name.de, p.x + 1, labelY + 1);
-            ctx.fillStyle = destroyed ? '#c87868' : '#e8dcc8';
-            ctx.fillText(loc.name.de, p.x, labelY);
+            // Parchment-toned cartouche background
+            const bgX = p.x - w / 2;
+            const bgY = labelY - h / 2;
+            ctx.fillStyle = destroyed
+                ? 'rgba(60, 20, 15, 0.85)'
+                : 'rgba(248, 232, 196, 0.92)';
+            ctx.fillRect(bgX, bgY, w, h);
+
+            // Ink border
+            ctx.strokeStyle = destroyed
+                ? 'rgba(120, 40, 20, 0.9)'
+                : 'rgba(90, 60, 30, 0.8)';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(bgX, bgY, w, h);
+
+            // Text
+            ctx.fillStyle = destroyed ? '#ffc8b0' : '#2a1810';
+            ctx.fillText(text, p.x, labelY);
             ctx.restore();
         }
     }
@@ -451,10 +600,10 @@ function renderLocationNodes(
 
 function getLabelOffset(type: string): number {
     switch (type) {
-        case 'village': return 18;
-        case 'farm': return 14;
-        case 'water': return 12;
-        default: return 10;
+        case 'village': return 26;
+        case 'farm': return 22;
+        case 'water': return 18;
+        default: return 18;
     }
 }
 
