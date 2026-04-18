@@ -20,6 +20,7 @@ import {
 import {
     renderParchmentTexture,
     renderHillshading,
+    renderPaintedForests,
     renderVignette,
     drawBookCompass,
     drawBookBorder,
@@ -28,6 +29,7 @@ import { renderBookTerrainOverlay } from '../worldmap/styles';
 import { renderBookNaturalForests } from '../worldmap/features/forests';
 import { renderBookMountainRidges } from '../worldmap/features/mountains';
 import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
+import { parseSVGPath, drawPointPath } from './svg-path';
 import {
     getVisibleLocations,
     isLocationDestroyed,
@@ -280,12 +282,12 @@ function renderProceduralTerrain(
         seed: WORLD_SEED,
         width,
         height,
-        scale: 8,
+        scale: 6,
         continentShape: 'pangaea',
-        seaLevel: 0.0,
-        mountainLevel: 0.88,
+        seaLevel: 0.02,
+        mountainLevel: 0.82,
         mapStyle: 'book',
-        forestDensity: 0.85,
+        forestDensity: 0.9,
         riverCount: 0,
     };
 
@@ -330,18 +332,28 @@ function renderProceduralTerrain(
     // farmland tones in east)
     renderBookTerrainOverlay(ctx, terrainCfg, heightMap, moistureMap);
 
-    // Hillshading for gentle rolling-hills depth
+    // Hillshading for terrain depth and rolling hills
     renderHillshading(ctx, width, height, heightMap, {
-        strength: 0.25,
-        ambient: 0.45,
+        strength: 0.3,
+        ambient: 0.4,
     });
 
-    // Individual trees — density follows the biased moisture map,
-    // so the west gets dense tree coverage (forest) and the east
-    // stays open (farmland with scattered trees).
+    // Painted forest masses — creates the lush green canopy areas
+    // that give the map its "Valcia" look. The moisture bias ensures
+    // forests concentrate in the west (Thalanor/Waldmeer) and thin
+    // out toward the east (farmland). This is the main visual
+    // difference from the parchment-only look.
+    renderPaintedForests(
+        ctx, width, height, heightMap, moistureMap, temperatureMap,
+        terrainCfg.seaLevel, terrainCfg.mountainLevel,
+        terrainCfg.forestDensity, WORLD_SEED,
+    );
+
+    // Individual trees at forest edges and scattered in clearings.
+    // These add the hand-drawn detail on top of the painted masses.
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
-    // Gentle mountain ridges (only the tallest hills get peaks)
+    // Mountain ridges along the highest terrain
     const ridgePoints = findMountainRidges(
         width, height, heightMap, terrainCfg.mountainLevel, rng,
     );
