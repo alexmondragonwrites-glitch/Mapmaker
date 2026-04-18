@@ -63,6 +63,11 @@ export class StoryMapGenerator {
             layerContours: true,
             layerVegetation: true,
             layerAging: true,
+            // Intensity sliders (0-100)
+            intensityFog: 40,
+            intensityContours: 50,
+            intensityVegetation: 40,
+            intensityAging: 50,
             terrainSeed: 42,
             forestSeed: 42,
             farmlandSeed: 900,
@@ -108,6 +113,11 @@ export class StoryMapGenerator {
             { type: 'checkbox', key: 'layerContours', label: '🏔️ Höhenlinien' },
             { type: 'checkbox', key: 'layerVegetation', label: '🌿 Vegetation' },
             { type: 'checkbox', key: 'layerAging', label: '🎨 Papier-Alterung' },
+            // Intensity sliders
+            { type: 'range', key: 'intensityFog', label: '☁️ Nebel-Stärke', min: 0, max: 100, step: 5 },
+            { type: 'range', key: 'intensityContours', label: '🏔️ Höhenlinien-Stärke', min: 0, max: 100, step: 5 },
+            { type: 'range', key: 'intensityVegetation', label: '🌿 Vegetation-Stärke', min: 0, max: 100, step: 5 },
+            { type: 'range', key: 'intensityAging', label: '🎨 Alterung-Stärke', min: 0, max: 100, step: 5 },
             { type: 'checkbox', key: 'layerLocations', label: '📍 Orte' },
             { type: 'checkbox', key: 'layerPaths', label: '🛤️ Wege' },
             { type: 'checkbox', key: 'layerCharacters', label: '👤 Charaktere' },
