@@ -491,7 +491,7 @@ function renderFarmland(
         const fy = noise.noise2D(0, i * 1.7) * height * 0.8 + height * 0.1;
         const fidx = Math.floor(fy) * width + Math.floor(Math.min(fx, width - 1));
         if (fidx >= 0 && fidx < moistureMap.length && moistureMap[fidx] > 0.55) continue;
-        const sz = 2 + noise2.noise2D(i * 3, i * 7) * 2.5;
+        const sz = Math.max(1, 2 + noise2.noise2D(i * 3, i * 7) * 2.5);
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = 'rgba(55, 85, 35, 0.8)';
         ctx.beginPath();
