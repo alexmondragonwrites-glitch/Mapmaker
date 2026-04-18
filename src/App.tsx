@@ -188,33 +188,31 @@ export default function App() {
     if (!isFirstRun && prevKey === zoomKey) return;
 
     if (zoom.level === 'city' && zoom.data) {
-      const cityGen = generators.find(g => g.id === 'citymap');
-      if (cityGen && activeGenerator?.id !== 'citymap') {
-        switchGenerator('citymap');
+      if (activeGenerator?.id === 'storymap') {
+        // Story Map: stay in storymap, switch to detail view
+        updateConfig('_viewLevel', 'detail');
+        updateConfig('_detailLocationId', zoom.data.id);
+      } else {
+        // Worldmap: switch to citymap generator
+        const cityGen = generators.find(g => g.id === 'citymap');
+        if (cityGen && activeGenerator?.id !== 'citymap') {
+          switchGenerator('citymap');
+        }
+        if (zoom.data.seed !== undefined) updateConfig('seed', zoom.data.seed);
+        if (zoom.data.id) updateConfig('loreCityId', zoom.data.id);
+        if (zoom.data.name) updateConfig('_cityName', zoom.data.name);
+        if (zoom.data.size) updateConfig('citySize', zoom.data.size);
+        if (zoom.data.style) updateConfig('style', zoom.data.style);
+        if (zoom.data.isCapital) updateConfig('hasCastle', true);
       }
-      // Pass the worldmap's city attributes into the citymap config
-      // so the generated citymap shows the correct name, size, and
-      // architectural style instead of inventing its own.
-      if (zoom.data.seed !== undefined) {
-        updateConfig('seed', zoom.data.seed);
+    } else if (zoom.level === 'world') {
+      if (activeGenerator?.id === 'storymap') {
+        // Story Map: return to world overview
+        updateConfig('_viewLevel', 'world');
+        updateConfig('_detailLocationId', null);
+      } else if (activeGenerator?.id !== 'worldmap') {
+        switchGenerator('worldmap');
       }
-      if (zoom.data.id) {
-        updateConfig('loreCityId', zoom.data.id);
-      }
-      if (zoom.data.name) {
-        updateConfig('_cityName', zoom.data.name);
-      }
-      if (zoom.data.size) {
-        updateConfig('citySize', zoom.data.size);
-      }
-      if (zoom.data.style) {
-        updateConfig('style', zoom.data.style);
-      }
-      if (zoom.data.isCapital) {
-        updateConfig('hasCastle', true);
-      }
-    } else if (zoom.level === 'world' && activeGenerator?.id !== 'worldmap') {
-      switchGenerator('worldmap');
     }
     // Intentionally omit `activeGenerator` from deps: we only want
     // this sync to fire on zoom target changes, not on manual
