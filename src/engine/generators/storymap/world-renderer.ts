@@ -374,12 +374,6 @@ function renderProceduralTerrain(
     // These add the hand-drawn detail on top of the painted masses.
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
-    // Mountain ridges along the highest terrain
-    const ridgePoints = findMountainRidges(
-        width, height, heightMap, terrainCfg.mountainLevel, rng,
-    );
-    renderBookMountainRidges(ctx, terrainCfg, ridgePoints, rng);
-
     // Farmland patterns in the east (dry/low-moisture areas)
     renderFarmland(ctx, width, height, moistureMap);
 
