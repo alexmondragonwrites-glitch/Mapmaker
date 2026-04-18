@@ -370,9 +370,16 @@ function renderProceduralTerrain(
         terrainCfg.forestDensity, WORLD_SEED,
     );
 
-    // Individual trees at forest edges and scattered in clearings.
-    // These add the hand-drawn detail on top of the painted masses.
-    renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
+    // Individual trees at forest edges only — we hide trees in
+    // medium/low moisture areas by zeroing out those moisture
+    // values temporarily. This prevents the tiny tree dots from
+    // scattering across the open farmland where they look like
+    // ugly speckles. Trees only appear in true forest (m > 0.65).
+    const forestOnlyMoisture = new Float32Array(moistureMap.length);
+    for (let i = 0; i < moistureMap.length; i++) {
+        forestOnlyMoisture[i] = moistureMap[i] > 0.65 ? moistureMap[i] : 0;
+    }
+    renderBookNaturalForests(ctx, terrainCfg, heightMap, forestOnlyMoisture, temperatureMap, rng);
 
     // Farmland patterns in the east (dry/low-moisture areas)
     renderFarmland(ctx, width, height, moistureMap);
