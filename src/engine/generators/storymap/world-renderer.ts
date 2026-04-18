@@ -878,21 +878,39 @@ function renderTitle(
     const chapterLabel = chapter === 0 ? 'Prolog' : `Kapitel ${chapter}`;
 
     ctx.save();
-    ctx.font = 'small-caps bold 16px "Palatino Linotype", serif';
+
+    // Measure text for cartouche sizing
+    ctx.font = 'small-caps bold 22px "Palatino Linotype", serif';
+    const titleW = ctx.measureText(title).width;
+    ctx.font = '13px "Palatino Linotype", serif';
+    const chapterW = ctx.measureText(chapterLabel).width;
+    const boxW = Math.max(titleW, chapterW) + 40;
+    const boxH = 52;
+    const boxX = (width - boxW) / 2;
+    const boxY = 8;
+
+    // Parchment cartouche background
+    ctx.fillStyle = 'rgba(248, 232, 196, 0.95)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = 'rgba(90, 60, 30, 0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+    // Inner border line
+    ctx.strokeStyle = 'rgba(90, 60, 30, 0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(boxX + 3, boxY + 3, boxW - 6, boxH - 6);
+
+    // Title text
+    ctx.font = 'small-caps bold 22px "Palatino Linotype", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+    ctx.fillStyle = '#2a1810';
+    ctx.fillText(title, width / 2, boxY + 8);
 
-    // Text shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillText(title, width / 2 + 1, 13);
-    ctx.fillStyle = '#c4873a';
-    ctx.fillText(title, width / 2, 12);
-
-    ctx.font = '11px "Palatino Linotype", serif';
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillText(chapterLabel, width / 2 + 1, 31);
-    ctx.fillStyle = '#9a8a6a';
-    ctx.fillText(chapterLabel, width / 2, 30);
+    // Chapter label
+    ctx.font = '13px "Palatino Linotype", serif';
+    ctx.fillStyle = '#6a4a2a';
+    ctx.fillText(chapterLabel, width / 2, boxY + 33);
     ctx.restore();
 }
 
