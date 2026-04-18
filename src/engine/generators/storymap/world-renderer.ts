@@ -307,20 +307,19 @@ function renderProceduralTerrain(
         width, height, heightMap, terrainCfg.seaLevel, WORLD_SEED,
     );
 
-    // Bias moisture: west = dense forest, east = open farmland.
-    // The story geography has Thalanor/Waldmeer (ancient forest)
-    // on the left and Calyndra (cultivated kingdom) on the right.
-    // Spiegelteich (x ~400 in view coords, ~40% of width) is the
-    // approximate forest-farmland transition.
+    // Bias moisture: west = dense forest, east = green pasture/farmland.
+    // West side: Thalanor/Waldmeer (dark forest, moisture ~0.85)
+    // Center: transition zone (mixed, moisture ~0.55)
+    // East side: Weidland/Calyndra (green pastures + fields, moisture ~0.35)
+    // NOT dry desert — the east is cultivated green land, just not forest.
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
             const t = x / width; // 0 = far west, 1 = far east
-            // West: boost moisture to 0.8+ (dense forest)
-            // East: reduce moisture to 0.2- (open fields)
-            const forestBias = 1.0 - t; // 1.0 in west, 0.0 in east
-            const biased = moistureMap[idx] * 0.3 + forestBias * 0.7;
-            moistureMap[idx] = biased;
+            // Forest bias: 0.85 in west, 0.35 in east (still green!)
+            const forestBias = 0.85 - t * 0.5;
+            const biased = moistureMap[idx] * 0.25 + forestBias * 0.75;
+            moistureMap[idx] = Math.max(0.25, biased);
         }
     }
 
@@ -375,32 +374,59 @@ function renderFarmland(
     height: number,
     moistureMap: Float32Array,
 ) {
-    // Add subtle field patterns in low-moisture (dry/farmland) areas.
-    // Creates the impression of cultivated land without looking like
-    // a grid paintover.
+    // Add field patterns in the eastern farmland areas.
+    // The Weidland has cultivated fields, pastures, and small
+    // field boundaries — not desert, but organized green land.
     const noise = new SimplexNoise(WORLD_SEED + 900);
+    const noise2 = new SimplexNoise(WORLD_SEED + 901);
+
     ctx.save();
-    ctx.globalAlpha = 0.18;
 
-    for (let y = 10; y < height - 10; y += 3) {
-        for (let x = 10; x < width - 10; x += 3) {
-            const idx = y * width + x;
-            const m = moistureMap[idx];
-            // Only paint where moisture is low (east side, farmland)
-            if (m > 0.35) continue;
-            // Break up into irregular field patches via noise
-            const patchNoise = noise.noise2D(x / 70, y / 70);
-            if (patchNoise < 0.15) continue;
+    // Field boundary lines — thin brown/dark lines creating
+    // irregular rectangular patches (like hedgerows or fences)
+    ctx.globalAlpha = 0.12;
+    for (let y = 20; y < height - 20; y += 28) {
+        for (let x = Math.floor(width * 0.5); x < width - 20; x += 35) {
+            const pn = noise.noise2D(x / 120, y / 120);
+            if (pn < 0.0) continue;
 
-            // Alternate short horizontal dashes for crop-row effect
-            const rowNoise = noise.noise2D(x / 15, y / 6);
-            if (rowNoise > 0.2) {
-                const shade = 120 + rowNoise * 30;
-                ctx.fillStyle = `rgb(${shade}, ${shade * 0.9}, ${shade * 0.6})`;
-                ctx.fillRect(x, y, 2, 1);
+            const fieldW = 20 + noise2.noise2D(x / 40, y / 40) * 12;
+            const fieldH = 14 + noise2.noise2D(x / 50, y / 50 + 5) * 8;
+            const angle = noise.noise2D(x / 200, y / 200) * 0.15;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.strokeStyle = 'rgba(80, 65, 35, 1)';
+            ctx.lineWidth = 0.6;
+            ctx.strokeRect(0, 0, fieldW, fieldH);
+
+            // Crop rows inside the field
+            ctx.strokeStyle = 'rgba(90, 75, 40, 0.7)';
+            ctx.lineWidth = 0.4;
+            const rowSpacing = 3 + Math.floor(pn * 2);
+            for (let ry = rowSpacing; ry < fieldH; ry += rowSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(1, ry);
+                ctx.lineTo(fieldW - 1, ry);
+                ctx.stroke();
             }
+            ctx.restore();
         }
     }
+
+    // Scattered small trees/bushes along field edges in east
+    ctx.globalAlpha = 0.25;
+    for (let i = 0; i < 40; i++) {
+        const fx = width * 0.6 + noise.noise2D(i, 0) * width * 0.35;
+        const fy = height * 0.15 + noise.noise2D(0, i) * height * 0.7;
+        const sz = 3 + noise2.noise2D(i * 3, i * 7) * 2;
+        ctx.fillStyle = `rgba(60, 90, 40, 0.6)`;
+        ctx.beginPath();
+        ctx.arc(fx, fy, sz, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     ctx.restore();
 }
 
@@ -411,81 +437,73 @@ function renderSerenRiver(
     width: number,
     height: number,
 ) {
-    // The Seren flows from a spring south of Willow Brook, curves
-    // through the village, then meanders eastward into the open
-    // farmland. Rendered in the world viewBox coordinates.
-    // Willow Brook is at roughly world (800, 292) — we'll draw the
-    // river going through that area.
-    //
-    // All coordinates here are in pixels (already canvas-scaled),
-    // computed as approximate fractions of the canvas.
-    const sx = width;
-    const sy = height;
-
+    // The Seren flows from the southwest (forest edge), curves
+    // THROUGH Willow Brook (world coords ~800, 292 = ~80% x, ~45% y),
+    // then meanders east into the farmland.
     const noise = new SimplexNoise(WORLD_SEED + 300);
 
-    ctx.save();
+    // Key waypoints as canvas fractions
+    const waypoints = [
+        { x: 0.42, y: 0.65 }, // source in the forest
+        { x: 0.52, y: 0.52 }, // emerging from woods
+        { x: 0.62, y: 0.48 }, // approaching village area
+        { x: 0.72, y: 0.43 }, // near Alwins Gehöft
+        { x: 0.80, y: 0.45 }, // THROUGH Willow Brook
+        { x: 0.88, y: 0.50 }, // past the village
+        { x: 0.95, y: 0.55 }, // flowing east into farmland
+        { x: 1.02, y: 0.52 }, // off the map edge
+    ];
 
-    // Build a meandering path through the eastern half of the map
+    // Interpolate between waypoints with meander noise
     const pathPts: { x: number; y: number }[] = [];
-    const startX = sx * 0.72;
-    const startY = sy * 0.75;  // spring south of village
-    const endX = sx * 0.98;
-    const endY = sy * 0.48;    // flowing northeast off the map
-    const steps = 40;
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const bx = startX + (endX - startX) * t;
-        const by = startY + (endY - startY) * t;
-        // Meander with noise perpendicular to the line
-        const meander = noise.noise2D(t * 5, 0) * sy * 0.04;
-        const meander2 = noise.noise2D(t * 12, 1) * sy * 0.015;
-        pathPts.push({
-            x: bx + Math.cos(Math.PI / 2) * meander,
-            y: by + meander + meander2,
-        });
+    for (let wi = 0; wi < waypoints.length - 1; wi++) {
+        const a = waypoints[wi];
+        const b = waypoints[wi + 1];
+        const segs = 15;
+        for (let i = 0; i <= segs; i++) {
+            const t = i / segs;
+            const bx = (a.x + (b.x - a.x) * t) * width;
+            const by = (a.y + (b.y - a.y) * t) * height;
+            const globalT = (wi + t) / waypoints.length;
+            const meander = noise.noise2D(globalT * 8, 0) * height * 0.018;
+            const small = noise.noise2D(globalT * 20, 1) * height * 0.006;
+            pathPts.push({ x: bx, y: by + meander + small });
+        }
     }
 
-    // River shadow (darker edges)
-    ctx.strokeStyle = 'rgba(40, 80, 110, 0.5)';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(pathPts[0].x, pathPts[0].y);
-    for (const p of pathPts) ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-
-    // River body
-    ctx.strokeStyle = 'rgba(80, 130, 170, 0.85)';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(pathPts[0].x, pathPts[0].y);
-    for (const p of pathPts) ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-
-    // River highlight (lighter center)
-    ctx.strokeStyle = 'rgba(150, 190, 220, 0.5)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(pathPts[0].x, pathPts[0].y);
-    for (const p of pathPts) ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-
-    // Label "Seren"
-    const midIdx = Math.floor(pathPts.length / 2);
-    const mid = pathPts[midIdx];
     ctx.save();
-    const p1 = pathPts[midIdx - 1];
-    const p2 = pathPts[midIdx + 1];
-    const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    ctx.translate(mid.x, mid.y - 10);
+
+    // Draw river with three strokes: shadow, body, highlight
+    const drawRiverStroke = (color: string, lineW: number) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineW;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(pathPts[0].x, pathPts[0].y);
+        for (let i = 1; i < pathPts.length; i++) {
+            ctx.lineTo(pathPts[i].x, pathPts[i].y);
+        }
+        ctx.stroke();
+    };
+
+    drawRiverStroke('rgba(30, 70, 100, 0.4)', 7);   // shadow
+    drawRiverStroke('rgba(70, 120, 160, 0.9)', 3.5); // body
+    drawRiverStroke('rgba(140, 185, 215, 0.5)', 1.2); // highlight
+
+    // Italic label following the river curve
+    const labelIdx = Math.floor(pathPts.length * 0.55);
+    const lp = pathPts[labelIdx];
+    const lp1 = pathPts[labelIdx - 2];
+    const lp2 = pathPts[labelIdx + 2];
+    const angle = Math.atan2(lp2.y - lp1.y, lp2.x - lp1.x);
+    ctx.save();
+    ctx.translate(lp.x, lp.y - 9);
     ctx.rotate(angle);
-    ctx.font = 'italic 13px "Palatino Linotype", serif';
+    ctx.font = 'italic 12px "Palatino Linotype", serif';
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(40, 80, 110, 0.85)';
-    ctx.fillText('~ Seren ~', 0, 0);
+    ctx.fillStyle = 'rgba(30, 70, 100, 0.8)';
+    ctx.fillText('Seren', 0, 0);
     ctx.restore();
 
     ctx.restore();
