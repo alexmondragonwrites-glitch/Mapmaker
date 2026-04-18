@@ -187,7 +187,18 @@ export default function App() {
     // run through.
     if (!isFirstRun && prevKey === zoomKey) return;
 
-    if (zoom.level === 'city' && zoom.data) {
+    // Storymap has its own internal zoom: 'region' = detail view.
+    // Keep the generator active and flip its _viewLevel config
+    // instead of swapping in the procedural citymap.
+    if (activeGenerator?.id === 'storymap') {
+      if (zoom.level === 'region' && zoom.data?.id) {
+        updateConfig('_viewLevel', 'detail');
+        updateConfig('_detailLocationId', zoom.data.id);
+      } else if (zoom.level === 'world') {
+        updateConfig('_viewLevel', 'world');
+        updateConfig('_detailLocationId', null);
+      }
+    } else if (zoom.level === 'city' && zoom.data) {
       const cityGen = generators.find(g => g.id === 'citymap');
       if (cityGen && activeGenerator?.id !== 'citymap') {
         switchGenerator('citymap');

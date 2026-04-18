@@ -941,7 +941,11 @@ function registerClickableAreas(
             y: p.y,
             radius: clickRadius,
             label: `${loc.name.de} (Details anzeigen)`,
-            targetLevel: 'city',
+            // Use 'region' level (instead of 'city') so App.tsx's
+            // zoom sync does NOT swap in the procedural citymap
+            // generator. The storymap handles its own detail view
+            // via _viewLevel='detail' + _detailLocationId config.
+            targetLevel: 'region',
             targetData: {
                 name: loc.name.de,
                 id: loc.id,
