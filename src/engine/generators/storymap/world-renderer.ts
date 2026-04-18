@@ -374,54 +374,78 @@ function renderFarmland(
     height: number,
     moistureMap: Float32Array,
 ) {
-    // Add field patterns in the eastern farmland areas.
-    // The Weidland has cultivated fields, pastures, and small
-    // field boundaries — not desert, but organized green land.
+    // Colorful patchwork of crop fields in the eastern farmland.
+    // Each field is a filled rectangle in green, golden, or brown
+    // tones — like the cultivated Weidland around Willow Brook.
     const noise = new SimplexNoise(WORLD_SEED + 900);
     const noise2 = new SimplexNoise(WORLD_SEED + 901);
 
+    // Field color palette: greens, golds, browns
+    const fieldColors = [
+        'rgba(95, 120, 55, 0.7)',   // dark green (crops)
+        'rgba(130, 155, 70, 0.65)', // medium green
+        'rgba(155, 170, 80, 0.6)',  // yellow-green
+        'rgba(175, 160, 80, 0.6)',  // golden (wheat)
+        'rgba(190, 170, 90, 0.55)', // light gold
+        'rgba(145, 120, 65, 0.6)',  // brown (plowed)
+        'rgba(120, 105, 55, 0.55)', // dark brown (fallow)
+        'rgba(110, 140, 65, 0.65)', // fresh green
+    ];
+
     ctx.save();
 
-    // Field boundary lines — thin brown/dark lines creating
-    // irregular rectangular patches (like hedgerows or fences)
-    ctx.globalAlpha = 0.12;
-    for (let y = 20; y < height - 20; y += 28) {
-        for (let x = Math.floor(width * 0.5); x < width - 20; x += 35) {
-            const pn = noise.noise2D(x / 120, y / 120);
-            if (pn < 0.0) continue;
+    // Only draw fields in the eastern part (right ~45% of map)
+    const fieldStartX = Math.floor(width * 0.55);
 
-            const fieldW = 20 + noise2.noise2D(x / 40, y / 40) * 12;
-            const fieldH = 14 + noise2.noise2D(x / 50, y / 50 + 5) * 8;
-            const angle = noise.noise2D(x / 200, y / 200) * 0.15;
+    for (let y = 30; y < height - 30; y += 18) {
+        for (let x = fieldStartX; x < width - 30; x += 22) {
+            // Noise decides if there's a field here (irregular coverage)
+            const pn = noise.noise2D(x / 80, y / 80);
+            if (pn < -0.15) continue;
+
+            // Field dimensions — irregular sizes
+            const fw = 14 + Math.floor(noise2.noise2D(x / 30, y / 30) * 10 + pn * 8);
+            const fh = 10 + Math.floor(noise2.noise2D(x / 40, y / 40 + 5) * 8);
+            const angle = noise.noise2D(x / 250, y / 250) * 0.12;
+
+            // Pick color from palette based on noise
+            const colorIdx = Math.floor((noise.noise2D(x / 50 + 10, y / 50 + 10) + 1) * 4) % fieldColors.length;
 
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate(angle);
-            ctx.strokeStyle = 'rgba(80, 65, 35, 1)';
-            ctx.lineWidth = 0.6;
-            ctx.strokeRect(0, 0, fieldW, fieldH);
 
-            // Crop rows inside the field
-            ctx.strokeStyle = 'rgba(90, 75, 40, 0.7)';
-            ctx.lineWidth = 0.4;
-            const rowSpacing = 3 + Math.floor(pn * 2);
-            for (let ry = rowSpacing; ry < fieldH; ry += rowSpacing) {
+            // Filled field parcel
+            ctx.fillStyle = fieldColors[colorIdx];
+            ctx.fillRect(0, 0, fw, fh);
+
+            // Thin border (hedge/fence line)
+            ctx.strokeStyle = 'rgba(70, 55, 30, 0.4)';
+            ctx.lineWidth = 0.7;
+            ctx.strokeRect(0, 0, fw, fh);
+
+            // Subtle crop row lines inside
+            ctx.strokeStyle = 'rgba(60, 50, 25, 0.2)';
+            ctx.lineWidth = 0.3;
+            const rowSpacing = 3;
+            for (let ry = rowSpacing; ry < fh; ry += rowSpacing) {
                 ctx.beginPath();
                 ctx.moveTo(1, ry);
-                ctx.lineTo(fieldW - 1, ry);
+                ctx.lineTo(fw - 1, ry);
                 ctx.stroke();
             }
+
             ctx.restore();
         }
     }
 
-    // Scattered small trees/bushes along field edges in east
-    ctx.globalAlpha = 0.25;
-    for (let i = 0; i < 40; i++) {
-        const fx = width * 0.6 + noise.noise2D(i, 0) * width * 0.35;
-        const fy = height * 0.15 + noise.noise2D(0, i) * height * 0.7;
-        const sz = 3 + noise2.noise2D(i * 3, i * 7) * 2;
-        ctx.fillStyle = `rgba(60, 90, 40, 0.6)`;
+    // Scattered small trees/bushes along field boundaries
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < 60; i++) {
+        const fx = width * 0.58 + noise.noise2D(i, 0) * width * 0.36;
+        const fy = height * 0.1 + noise.noise2D(0, i) * height * 0.8;
+        const sz = 2.5 + noise2.noise2D(i * 3, i * 7) * 2;
+        ctx.fillStyle = `rgba(50, 80, 35, 0.7)`;
         ctx.beginPath();
         ctx.arc(fx, fy, sz, 0, Math.PI * 2);
         ctx.fill();
