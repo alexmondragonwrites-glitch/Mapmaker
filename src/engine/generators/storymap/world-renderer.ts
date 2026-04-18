@@ -486,10 +486,10 @@ function renderVegetation(
             const n = noise.noise2D(x / 18, y / 18);
             if (n < 0.05) continue;
 
-            ctx.globalAlpha = 0.4 + n * 0.2;
-            const bladeH = 5 + n * 4;
-            ctx.strokeStyle = 'rgba(60, 95, 35, 0.9)';
-            ctx.lineWidth = 0.8;
+            ctx.globalAlpha = 0.2 + n * 0.1;
+            const bladeH = 3 + n * 2;
+            ctx.strokeStyle = 'rgba(70, 100, 45, 0.6)';
+            ctx.lineWidth = 0.5;
             for (let b = -1; b <= 1; b++) {
                 ctx.beginPath();
                 ctx.moveTo(x + b * 2, y);
@@ -499,19 +499,19 @@ function renderVegetation(
         }
     }
 
-    // Flowers — bigger, more of them
-    for (let i = 0; i < 200; i++) {
+    // Flowers — subtle accents
+    for (let i = 0; i < 80; i++) {
         const fx = noise.noise2D(i * 2.3, 0) * width * 0.5 + width * 0.5;
         const fy = noise.noise2D(0, i * 2.3) * height * 0.8 + height * 0.1;
         const fidx = Math.floor(fy) * width + Math.floor(Math.min(Math.max(fx, 0), width - 1));
         if (fidx < 0 || fidx >= moistureMap.length) continue;
         if (moistureMap[fidx] > 0.55 || moistureMap[fidx] < 0.25) continue;
 
-        ctx.globalAlpha = 0.6;
-        const colors = ['#e8d44d', '#d4a0a0', '#b0c4de', '#daa520', '#c87070', '#90b060'];
+        ctx.globalAlpha = 0.3;
+        const colors = ['#e8d44d', '#d4a0a0', '#b0c4de', '#daa520'];
         ctx.fillStyle = colors[i % colors.length];
         ctx.beginPath();
-        ctx.arc(fx, fy, 1.8, 0, Math.PI * 2);
+        ctx.arc(fx, fy, 1.2, 0, Math.PI * 2);
         ctx.fill();
     }
 
