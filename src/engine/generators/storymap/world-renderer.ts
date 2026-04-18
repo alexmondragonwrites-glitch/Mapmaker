@@ -27,7 +27,6 @@ import {
 } from '../../bookstyle';
 import { renderBookTerrainOverlay } from '../worldmap/styles';
 import { renderBookNaturalForests } from '../worldmap/features/forests';
-import { renderBookMountainRidges } from '../worldmap/features/mountains';
 import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
 import { parseSVGPath, drawPointPath } from './svg-path';
 import {
@@ -374,11 +373,15 @@ function renderProceduralTerrain(
     // These add the hand-drawn detail on top of the painted masses.
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
-    // Mountain ridges along the highest terrain
+    // Rolling hills on the highest terrain. The story region is
+    // gentle borderland, not a mountain range — so instead of sharp
+    // triangle peaks we draw soft rounded arcs in the style of old
+    // hand-drawn maps. findMountainRidges gives us the highest
+    // heightmap cells; we just sample a few and render low bumps.
     const ridgePoints = findMountainRidges(
         width, height, heightMap, terrainCfg.mountainLevel, rng,
     );
-    renderBookMountainRidges(ctx, terrainCfg, ridgePoints, rng);
+    renderRollingHills(ctx, ridgePoints, rng);
 
     // Farmland patterns in the east (dry/low-moisture areas)
     renderFarmland(ctx, width, height, moistureMap);
@@ -482,6 +485,69 @@ function renderFarmland(
     }
 
     ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
+// ── Rolling Hills ──────────────────────────────────────────────
+
+function renderRollingHills(
+    ctx: CanvasRenderingContext2D,
+    ridgePoints: { x: number; y: number }[],
+    rng: { next: () => number },
+) {
+    if (ridgePoints.length === 0) return;
+
+    // Thin out and cluster: one hill per ~50 sampled peak cells
+    const hills: { x: number; y: number; w: number }[] = [];
+    const stride = Math.max(50, Math.floor(ridgePoints.length / 8));
+    for (let i = 0; i < ridgePoints.length; i += stride) {
+        const pt = ridgePoints[i];
+        // Jitter so multiple stride samples don't line up in a grid
+        hills.push({
+            x: pt.x + (rng.next() - 0.5) * 14,
+            y: pt.y + (rng.next() - 0.5) * 10,
+            w: 22 + rng.next() * 18,
+        });
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (const h of hills) {
+        const w = h.w;
+        const arcH = w * 0.35;
+
+        // Soft green-brown fill under the arc (hill mass)
+        ctx.fillStyle = 'rgba(110, 125, 80, 0.35)';
+        ctx.beginPath();
+        ctx.moveTo(h.x - w / 2, h.y);
+        ctx.quadraticCurveTo(h.x, h.y - arcH * 1.4, h.x + w / 2, h.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ink contour — two short overlapping strokes for hand-drawn feel
+        ctx.strokeStyle = 'rgba(70, 55, 35, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(h.x - w / 2, h.y);
+        ctx.quadraticCurveTo(h.x - w * 0.15, h.y - arcH * 1.35, h.x + w * 0.1, h.y - arcH * 0.2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(h.x - w * 0.05, h.y - arcH * 0.3);
+        ctx.quadraticCurveTo(h.x + w * 0.2, h.y - arcH * 1.1, h.x + w / 2, h.y);
+        ctx.stroke();
+
+        // Tiny shadow stroke under the arc for dimensionality
+        ctx.strokeStyle = 'rgba(60, 45, 25, 0.3)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(h.x - w * 0.4, h.y + 1);
+        ctx.quadraticCurveTo(h.x, h.y + 2, h.x + w * 0.4, h.y + 1);
+        ctx.stroke();
+    }
+
     ctx.restore();
 }
 
