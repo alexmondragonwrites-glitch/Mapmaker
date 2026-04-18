@@ -25,7 +25,6 @@ import {
     drawBookBorder,
 } from '../../bookstyle';
 import { renderBookTerrainOverlay } from '../worldmap/styles';
-import { renderBookNaturalForests } from '../worldmap/features/forests';
 import { drawTree, drawHumanHouse, drawTower, drawTemple, drawWell } from '../../assets';
 import { parseSVGPath, drawPointPath } from './svg-path';
 import {
@@ -369,15 +368,17 @@ function renderProceduralTerrain(
     // forests concentrate in the west (Thalanor/Waldmeer) and thin
     // out toward the east (farmland). This is the main visual
     // difference from the parchment-only look.
+    //
+    // NOTE: we deliberately do NOT call renderBookNaturalForests
+    // here. That renderer draws individual pine trees as small ink
+    // triangles with horizontal layers, which clash with the
+    // continuous topographic look of the reference map. The painted
+    // forest blobs alone give the right watercolor canopy feel.
     renderPaintedForests(
         ctx, width, height, heightMap, moistureMap, temperatureMap,
         terrainCfg.seaLevel, terrainCfg.mountainLevel,
         terrainCfg.forestDensity, WORLD_SEED,
     );
-
-    // Individual trees at forest edges and scattered in clearings.
-    // These add the hand-drawn detail on top of the painted masses.
-    renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
 
     // Farmland patterns in the east (dry/low-moisture areas)
     renderFarmland(ctx, width, height, moistureMap);
