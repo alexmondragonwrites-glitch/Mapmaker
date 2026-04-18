@@ -401,19 +401,37 @@ function renderProceduralTerrain(
         ambient: 0.4,
     });
 
-    // Forest layer — painted masses + individual trees
+    // Forest layer — painted masses + individual trees + deep canopy
     if (layers.forest) {
-        const forestRng = new SeededRandom(seeds.forest);
+        // First pass: painted forest masses (green canopy fills)
         renderPaintedForests(
             ctx, width, height, heightMap, moistureMap, temperatureMap,
             terrainCfg.seaLevel, terrainCfg.mountainLevel,
             terrainCfg.forestDensity, seeds.forest,
         );
+
+        // Second pass: darken deep forest areas for depth
+        const forestNoise = new SimplexNoise(seeds.forest + 50);
+        for (let y = 0; y < height; y += 2) {
+            for (let x = 0; x < width; x += 2) {
+                const idx = y * width + x;
+                const m = moistureMap[idx];
+                if (m < 0.7) continue;
+                const n = forestNoise.noise2D(x / 40, y / 40);
+                if (n < 0) continue;
+                const depth = (m - 0.7) * 3 * n;
+                ctx.fillStyle = `rgba(15, 35, 8, ${Math.min(0.25, depth)})`;
+                ctx.fillRect(x, y, 2, 2);
+            }
+        }
+
+        // Individual trees — lowered threshold so more trees appear
+        const forestRng = new SeededRandom(seeds.forest);
         const forestOnlyMoisture = new Float32Array(moistureMap.length);
         for (let i = 0; i < moistureMap.length; i++) {
-            forestOnlyMoisture[i] = moistureMap[i] > 0.65 ? moistureMap[i] : 0;
+            forestOnlyMoisture[i] = moistureMap[i] > 0.55 ? moistureMap[i] : 0;
         }
-        renderBookNaturalForests(ctx, terrainCfg, heightMap, forestOnlyMoisture, temperatureMap, forestRng);
+        renderBookNaturalForests(ctx, { ...terrainCfg, forestDensity: 0.95 }, heightMap, forestOnlyMoisture, temperatureMap, forestRng);
     }
 
     // Farmland layer
@@ -426,22 +444,22 @@ function renderProceduralTerrain(
         renderSerenRiver(ctx, width, height);
     }
 
-    // Vegetation detail — grass tufts, shrubs in open areas
-    if (layers.vegetation) {
-        renderVegetation(ctx, width, height, moistureMap, seeds.terrain);
-    }
-
-    // Contour lines from heightmap
+    // Contour lines from heightmap (draws UNDER fog/vegetation)
     if (layers.contours) {
         renderContourLines(ctx, width, height, heightMap);
     }
 
-    // Fog/mist in valleys and at forest edge
+    // Vegetation detail — only in open non-forest, non-field areas
+    if (layers.vegetation) {
+        renderVegetation(ctx, width, height, moistureMap, seeds.terrain);
+    }
+
+    // Fog/mist — light touch, doesn't obscure terrain
     if (layers.fog) {
         renderFog(ctx, width, height, heightMap, moistureMap, seeds.terrain);
     }
 
-    // Paper aging (stains, spots, wear)
+    // Paper aging (stains, spots, wear) — last, on top of everything
     if (layers.aging) {
         renderPaperAging(ctx, width, height, seeds.terrain);
     }
@@ -562,8 +580,8 @@ function renderFog(
             const fogAmount = (elevFog + moistFog) * (fogNoise + 0.3);
             if (fogAmount < 0.01) continue;
 
-            ctx.globalAlpha = Math.min(0.35, fogAmount);
-            ctx.fillStyle = 'rgba(225, 220, 205, 1)';
+            ctx.globalAlpha = Math.min(0.18, fogAmount);
+            ctx.fillStyle = 'rgba(230, 225, 210, 1)';
             ctx.fillRect(x, y, 2, 2);
         }
     }
@@ -576,8 +594,8 @@ function renderFog(
         const ry = 20 + noise.noise2D(i + 5, i + 5) * 15;
 
         const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, rx);
-        grad.addColorStop(0, 'rgba(235, 230, 215, 0.25)');
-        grad.addColorStop(0.5, 'rgba(225, 220, 205, 0.12)');
+        grad.addColorStop(0, 'rgba(235, 230, 215, 0.15)');
+        grad.addColorStop(0.5, 'rgba(225, 220, 205, 0.07)');
         grad.addColorStop(1, 'rgba(215, 210, 195, 0)');
         ctx.globalAlpha = 1;
         ctx.fillStyle = grad;
