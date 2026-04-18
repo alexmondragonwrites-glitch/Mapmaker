@@ -15,7 +15,6 @@ import {
     generateAdvancedHeightMap,
     generateTemperatureMap,
     generateAdvancedMoistureMap,
-    findMountainRidges,
 } from '../../terrain';
 import {
     renderParchmentTexture,
@@ -352,11 +351,18 @@ function renderProceduralTerrain(
     // farmland tones in east)
     renderBookTerrainOverlay(ctx, terrainCfg, heightMap, moistureMap);
 
-    // Hillshading for terrain depth and rolling hills
+    // Hillshading for terrain depth and rolling hills.
+    // Stronger strength + lower ambient makes ridges pop like in
+    // hand-painted topographic fantasy maps (clear sun/shadow sides).
     renderHillshading(ctx, width, height, heightMap, {
-        strength: 0.3,
-        ambient: 0.4,
+        strength: 0.55,
+        ambient: 0.35,
     });
+
+    // Topographic contour lines — traces iso-elevation boundaries
+    // with fine ink strokes. Replaces the old discrete hill icons
+    // with a continuous relief look similar to hand-drawn maps.
+    renderContourLines(ctx, width, height, heightMap);
 
     // Painted forest masses — creates the lush green canopy areas
     // that give the map its "Valcia" look. The moisture bias ensures
@@ -372,16 +378,6 @@ function renderProceduralTerrain(
     // Individual trees at forest edges and scattered in clearings.
     // These add the hand-drawn detail on top of the painted masses.
     renderBookNaturalForests(ctx, terrainCfg, heightMap, moistureMap, temperatureMap, rng);
-
-    // Rolling hills on the highest terrain. The story region is
-    // gentle borderland, not a mountain range — so instead of sharp
-    // triangle peaks we draw soft rounded arcs in the style of old
-    // hand-drawn maps. findMountainRidges gives us the highest
-    // heightmap cells; we just sample a few and render low bumps.
-    const ridgePoints = findMountainRidges(
-        width, height, heightMap, terrainCfg.mountainLevel, rng,
-    );
-    renderRollingHills(ctx, ridgePoints, rng);
 
     // Farmland patterns in the east (dry/low-moisture areas)
     renderFarmland(ctx, width, height, moistureMap);
@@ -488,67 +484,65 @@ function renderFarmland(
     ctx.restore();
 }
 
-// ── Rolling Hills ──────────────────────────────────────────────
+// ── Topographic Contour Lines ──────────────────────────────────
 
-function renderRollingHills(
+/**
+ * Trace elevation iso-lines across the heightmap using the
+ * marching-squares boundary test. For each threshold, a pixel is
+ * marked if it's above the threshold and at least one 4-neighbor
+ * is below — that's the 1-pixel boundary of the elevation band.
+ *
+ * The result is a set of fine concentric ink lines around each
+ * peak and ridge, which reads as hand-drawn topographic relief
+ * (similar to the reference map style) without any discrete icons.
+ */
+function renderContourLines(
     ctx: CanvasRenderingContext2D,
-    ridgePoints: { x: number; y: number }[],
-    rng: { next: () => number },
+    width: number,
+    height: number,
+    heightMap: Float32Array,
 ) {
-    if (ridgePoints.length === 0) return;
+    // Six thresholds across the mid-to-high elevation range. The
+    // lowest is above seaLevel so we don't ring the water line.
+    const thresholds = [0.32, 0.42, 0.52, 0.62, 0.72, 0.82];
 
-    // Thin out and cluster: one hill per ~50 sampled peak cells
-    const hills: { x: number; y: number; w: number }[] = [];
-    const stride = Math.max(50, Math.floor(ridgePoints.length / 8));
-    for (let i = 0; i < ridgePoints.length; i += stride) {
-        const pt = ridgePoints[i];
-        // Jitter so multiple stride samples don't line up in a grid
-        hills.push({
-            x: pt.x + (rng.next() - 0.5) * 14,
-            y: pt.y + (rng.next() - 0.5) * 10,
-            w: 22 + rng.next() * 18,
-        });
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    for (const t of thresholds) {
+        // Higher peaks get darker, more prominent contours
+        const alpha = Math.min(0.55, 0.22 + (t - 0.32) * 0.5);
+        const invA = 1 - alpha;
+        // Warm ink brown — blends with the parchment base
+        const inkR = 70, inkG = 52, inkB = 32;
+
+        for (let y = 0; y < height - 1; y++) {
+            const row = y * width;
+            const rowD = row + width;
+            for (let x = 0; x < width - 1; x++) {
+                const idx = row + x;
+                const h = heightMap[idx];
+                const above = h >= t;
+                // 4-connected boundary test — a pixel sits on the
+                // iso-line if it straddles the threshold relative
+                // to its right or down neighbor.
+                if (above === (heightMap[idx + 1] >= t) &&
+                    above === (heightMap[rowD + x] >= t)) {
+                    continue;
+                }
+                // Skip low-lying pixels — we only want contours
+                // where terrain actually rises above the threshold.
+                if (!above) continue;
+
+                const pi = idx * 4;
+                data[pi]     = Math.round(data[pi]     * invA + inkR * alpha);
+                data[pi + 1] = Math.round(data[pi + 1] * invA + inkG * alpha);
+                data[pi + 2] = Math.round(data[pi + 2] * invA + inkB * alpha);
+            }
+        }
     }
 
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    for (const h of hills) {
-        const w = h.w;
-        const arcH = w * 0.35;
-
-        // Soft green-brown fill under the arc (hill mass)
-        ctx.fillStyle = 'rgba(110, 125, 80, 0.35)';
-        ctx.beginPath();
-        ctx.moveTo(h.x - w / 2, h.y);
-        ctx.quadraticCurveTo(h.x, h.y - arcH * 1.4, h.x + w / 2, h.y);
-        ctx.closePath();
-        ctx.fill();
-
-        // Ink contour — two short overlapping strokes for hand-drawn feel
-        ctx.strokeStyle = 'rgba(70, 55, 35, 0.75)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(h.x - w / 2, h.y);
-        ctx.quadraticCurveTo(h.x - w * 0.15, h.y - arcH * 1.35, h.x + w * 0.1, h.y - arcH * 0.2);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(h.x - w * 0.05, h.y - arcH * 0.3);
-        ctx.quadraticCurveTo(h.x + w * 0.2, h.y - arcH * 1.1, h.x + w / 2, h.y);
-        ctx.stroke();
-
-        // Tiny shadow stroke under the arc for dimensionality
-        ctx.strokeStyle = 'rgba(60, 45, 25, 0.3)';
-        ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        ctx.moveTo(h.x - w * 0.4, h.y + 1);
-        ctx.quadraticCurveTo(h.x, h.y + 2, h.x + w * 0.4, h.y + 1);
-        ctx.stroke();
-    }
-
-    ctx.restore();
+    ctx.putImageData(imageData, 0, 0);
 }
 
 // ── Seren River ────────────────────────────────────────────────
