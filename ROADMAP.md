@@ -51,14 +51,91 @@
 
 ## Phase 1 — Noch offen
 
-### Detail-Karten (Klick auf Ort → Gebäude-Ansicht)
-- Klick auf Willow Brook → zeigt Dorfkarte mit Gebäuden aus JSON
-- Gebäude nach `minChapter` gefiltert
-- Zerstörte Gebäude (`destroyedChapter`) visuell markiert
-- Lokale Pfade innerhalb des Ortes gerendert
-- Fluss Seren durch Willow Brook (aus `world-features.json`)
-- Charakter-Positionen auf Gebäude-Ebene
-- Typ-spezifisches Rendering (Tempel, Häuser, Brunnen, Marktplatz)
+### Detail-Karten — Grundsystem ✅ (erster Entwurf steht)
+- ✅ Klick auf Ort → Detail-View mit Gebäuden aus JSON
+- ✅ Gebäude nach `minChapter` gefiltert
+- ✅ Zerstörte Gebäude (`destroyedChapter`) visuell markiert (rotes X)
+- ✅ Lokale Pfade innerhalb des Ortes gerendert
+- ✅ Fluss Seren durch Willow Brook
+- ✅ Charakter-Marker + Übernatürliche Auren
+- ✅ ESC → zurück zur Weltkarte
+
+### Detail-Karten — Ortsspezifische Verbesserungen
+Jeder Ort braucht seine eigene visuelle Ausarbeitung:
+
+**Willow Brook (Dorf)**
+- Fluss Seren mit Brücke + Trittsteinen (aus JSON crossings)
+- Weidenzweige am Flussufer
+- Strohgedeckte Häuser statt generischer Rechtecke
+- Mühle am Fluss (drehendes Mühlrad als Icon)
+- Rauchende Schornsteine
+- Kräutergarten-Textur für Meiras Garten
+- Tempel mit Turm als dominantes Gebäude
+- Marktplatz mit Brunnen in der Mitte
+- Feldwege zwischen den Häusern
+- Atmosphäre: warm, golden (Spätsommer)
+- Kapitel 6: Flammen, Rauch, zerstörte Gebäude rot/schwarz
+
+**Alwins Gehöft (Farm)**
+- Zersplitterter Schafspferch (ab Kapitel 1 zerstört)
+- Einzelnes Bauernhaus mit offenem Tor
+- Weideland-Hügel im Hintergrund
+- Holzstapel ordentlich gestapelt
+- Steinbrunnen im Hof
+- Steinkreuz mit Mondlicht-Schimmer (übernatürlich)
+- Atmosphäre: verlassen, windige Hügel
+
+**Spiegelteich (Gewässer)**
+- Großer Teich mit Spiegeleffekt (schwarzes Glas)
+- Umgestürzter Baumstamm als Brücke über den Teich
+- Schilfgürtel am Südufer
+- Alte Buche am Ostufer
+- Unnatürliche Gespinste in den Bäumen (ab Kapitel 1)
+- Bemooste Steine am Westufer
+- Atmosphäre: still, neblig, unheimlich ab Kapitel 2
+
+**Die Alte Eiche (Wahrzeichen)**
+- Kolossaler Eichenbaum als Zentrum (übergroßes Icon)
+- Kreisrunde Lichtung drumherum
+- Zwei massive Wurzelstränge nach Süden
+- Farngestrüpp am Rand
+- Alwins letzte Fußspuren (ab Kapitel 1, enden abrupt)
+- Vibrations-Aura (goldenes Glühen ab Kapitel 1)
+
+**Rotader Senke (Höhle/Senke)**
+- Flache Mulde mit dunklem Boden
+- Zwei Wurzelstränge (links/rechts) die auseinanderlaufen
+- Rötlicher Tümpel in der Mitte (unnatürliches Glimmen ab Kapitel 1)
+- Moosteppich der Schritte verschluckt
+- Lehmhang am Rand
+- Atmosphäre: süßlicher Geruch, bedrohlich rot
+
+**Fuchsbau (Unterschlupf)**
+- Halb entwurzelte Kiefer als Eingang
+- Unterirdische Hauptkammer mit Wurzelgewölbe
+- Seitentunnel in die Dunkelheit (ab Kapitel 3)
+- Wurzelgeflecht-Decke mit rötlichem Staub
+- Heilungsstelle (blaues Leuchten ab Kapitel 3)
+- Moosbett wo Corin bewusstlos liegt
+- Atmosphäre: feucht, erdig, eng
+
+**Nebelruh (Walters Jagdhütte)**
+- Solide Holzhütte mit Steinschornstein
+- Feuerstelle mit Rauch
+- Übungsplatz (Trainingsgelände)
+- Ausguck (erhöhter Posten)
+- Natürliche Quelle am Hang
+- Vorratslager + Holzstapel
+- Atmosphäre: neblig, sicher, rustikal
+
+**Waldsenke (Kesselsenke)**
+- Tiefe Mulde mit glattem Steinboden
+- Gespinste in den Baumkronen (wie ein Nervennetz)
+- Ausgelaugter Stein (ab Kapitel 6, grau/farblos)
+- Strömungsrisse mit rotem Pulsieren (ab Kapitel 7)
+- Bemooster Stamm mit blau leuchtendem Pilz
+- Steiler Senkenrand
+- Atmosphäre: dunkel, bedrohlich, das Netz IST der Boden
 
 ### Layer-System
 - Layer-Panel in Sidebar
